@@ -1,0 +1,246 @@
+# منظومة · الورشة الاستراتيجية
+
+> Strategic Workbench — تصنيف المحافظ، إدارة التشكيلات، Gantt احترافي بـ RTL  
+> طبقة إضافية فوق قاعدة بيانات Manzuma الحالية، **بدون أي تعديل على البيانات أو الجداول الموجودة**
+
+---
+
+## ⚡ نظرة سريعة
+
+| | |
+|---|---|
+| **Backend** | Supabase (Manzuma Dashboard project) |
+| **Hosting** | Cloudflare Pages (متوافق مع AWS Amplify أيضاً) |
+| **Build step** | لا يوجد — ES Modules مباشرة |
+| **Language** | JavaScript ES2022 vanilla |
+| **Style** | Tajawal · RTL · Light theme |
+| **API client** | `@supabase/supabase-js@2.45.4` من esm.sh CDN |
+
+---
+
+## 🗂 بنية المشروع
+
+```
+manzuma/
+├── index.html                  ← الصفحة الرئيسية (Portfolios)
+├── workbench.html              ← ورشة الهيكل
+├── config.js                   ← مفاتيح Supabase + اختيار الـ backend
+│
+├── css/
+│   ├── tokens.css              ← متغيرات التصميم (لون، خط، مسافات)
+│   ├── base.css                ← reset + body + RTL + loading
+│   ├── components.css          ← أزرار، بطاقات، modals، toasts
+│   ├── views.css               ← أنماط Kanban + Portfolio Detail + Workbench
+│   └── gantt.css               ← Gantt Chart
+│
+├── js/
+│   ├── app.js                  ← Entry + Router (hash-based)
+│   ├── store.js                ← State + actions + audit
+│   ├── schema.js               ← Schema + offline migrations
+│   ├── models.js               ← Domain helpers
+│   │
+│   ├── data/
+│   │   ├── adapter.js          ← Interface المشترك
+│   │   ├── local-adapter.js    ← localStorage (احتياطي)
+│   │   ├── supabase-adapter.js ← Supabase (الافتراضي)
+│   │   └── clickup-adapter.js  ← stub للتكامل المستقبلي
+│   │
+│   ├── components/
+│   │   ├── modal.js            ← Form modal + confirm dialog
+│   │   ├── toast.js            ← Toast notifications
+│   │   ├── drag-drop.js        ← HTML5 DnD utilities
+│   │   ├── gantt.js            ← Gantt Chart RTL
+│   │   └── filter-bar.js       ← شريط فلترة موحد
+│   │
+│   └── views/
+│       ├── portfolios.js       ← Kanban المحافظ
+│       ├── portfolio.js        ← عرض محفظة واحدة (مع فلترة)
+│       ├── project.js          ← عرض مشروع + Gantt
+│       └── workbench.js        ← Formations + Pool
+│
+├── supabase/
+│   └── schema.sql              ← Canonical schema reference
+│
+└── README.md
+```
+
+---
+
+## 🧭 المسارات (Routes)
+
+التطبيق single-page بـ hash-based routing:
+
+| المسار | الصفحة |
+|---|---|
+| `#portfolios` | Kanban بـ 4 أعمدة (التأسيس · النمو · 0/1 · غير مصنف) |
+| `#portfolio?pf=ID` | عرض تفصيلي لمحفظة واحدة مع كل مفاهيمها |
+| `#project?id=ID` | تفاصيل مشروع/مبادرة مع Gantt و مراحل |
+| `#workbench[?concept=ID]` | ورشة التشكيلات و الأفراد و الكيانات |
+
+---
+
+## 🚀 النشر على Cloudflare Pages
+
+### الخطوات
+
+```bash
+# 1) أنشئ ريبو GitHub جديد
+cd manzuma
+git init
+git add .
+git commit -m "Initial workbench"
+git remote add origin https://github.com/<USERNAME>/manzuma-workbench.git
+git push -u origin main
+
+# 2) في لوحة Cloudflare Pages:
+#    - Connect to Git
+#    - اختر الريبو
+#    - Build command: (اتركه فارغاً)
+#    - Build output directory: /
+#    - حفظ
+```
+
+ستحصل على رابط مباشر مثل `https://manzuma-workbench.pages.dev`.
+
+> 💡 **ملاحظة:** هذا الـ deploy ساكن (static) بالكامل — لا backend ولا build step. كل الـ logic في المتصفح، والـ DB هو Supabase مباشرة.
+
+---
+
+## 🔐 الأمان
+
+### الحالة الحالية (تطوير)
+- جميع الـ tables الجديدة (`wb_*`) لها RLS مفعّل
+- السياسات الحالية permissive — يمكن للـ anon key الكتابة والقراءة
+- مناسب للتطوير فقط
+
+### قبل النشر للعموم (يجب)
+```sql
+-- مثال: قراءة فقط للـ anon، الكتابة محصورة بـ authenticated users
+DROP POLICY "wb_portfolios_all" ON wb_portfolios;
+CREATE POLICY "wb_portfolios_read"  ON wb_portfolios FOR SELECT USING (true);
+CREATE POLICY "wb_portfolios_write" ON wb_portfolios FOR ALL USING (auth.role() = 'authenticated');
+```
+
+أو استخدم Supabase Auth + service role للـ admin panel.
+
+---
+
+## 🧩 طبقة البيانات (Adapter Pattern)
+
+```
+Views → Store → DataAdapter ← interface
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+   LocalAdapter  SupabaseAdapter ClickUpAdapter (stub)
+   (offline)     (primary)      (future)
+```
+
+التبديل بين الـ backends بتغيير سطر واحد في `config.js`:
+
+```js
+export const BACKEND = 'supabase';  // أو 'local'
+```
+
+---
+
+## 📊 الجداول في Supabase
+
+تم إنشاؤها بواسطة migration `create_workbench_layer`.
+
+| الجدول | الغرض | الصفوف |
+|---|---|---|
+| `wb_portfolios` | المحافظ الـ 3 | 3 |
+| `wb_individuals` | الأفراد | (تُضاف من الواجهة) |
+| `wb_entities` | الكيانات | (تُضاف من الواجهة) |
+| `wb_formations` | التشكيلات | (تُضاف من الواجهة) |
+| `wb_formation_members` | M:N أفراد↔تشكيل | (تلقائي) |
+| `wb_formation_entities` | M:N كيانات↔تشكيل | (تلقائي) |
+| `wb_project_phases` | مراحل المشاريع | (تُضاف من Gantt) |
+| `wb_audit_log` | سجل التغييرات | (تلقائي) |
+| `wb_baselines` | نقاط Baseline | (يدوي) |
+
+### الجداول الموجودة (لم تُمَس)
+`bot_entities`, `pm_snapshots`, `task_activity`, `pm_lists_config`, `maturity_history`, `portfolio_structure`, وجداول البوت — كلها سليمة.
+
+### الإضافات على `bot_entities`
+- `portfolio_id` (FK → wb_portfolios)
+- `formation_id` (FK → wb_formations)
+- `sort_order` (INT)
+
+---
+
+## 🧠 المفاهيم الأساسية
+
+### Project vs Initiative
+- **Initiative (مبادرة):** فكرة لم تبدأ — بدون مراحل ولا Gantt
+- **Project (مشروع):** بدأ التنفيذ — مراحل + جدول زمني + Gantt
+
+التحويل ↔ بزر واحد. عند العودة لمبادرة، المراحل **تُحفظ في DB** ولا تُحذف.
+
+### Phase Statuses
+- `not_started` — لم تبدأ (رمادي، حدود متقطعة)
+- `in_progress` — قيد التنفيذ (ذهبي، مع progress bar)
+- `completed` — مكتمل (أخضر)
+- `blocked` — متعثر (أحمر)
+
+### Gantt Chart RTL
+المحور الزمني يقرأ **يميناً → يساراً**:
+- يناير على اليمين
+- ديسمبر على اليسار
+- شريط «اليوم» عمودي يعبر كل المراحل
+- progress fill داخل الـ bar للمراحل الجارية
+
+---
+
+## 🛣 خارطة الطريق
+
+### تم بناؤه ✅
+- Kanban المحافظ بـ drag-and-drop
+- Portfolio detail بـ filtering
+- Project detail + Gantt احترافي
+- Workbench: Formations + Pool
+- Baseline + Audit Log
+- Initiative ↔ Project toggle
+- Supabase adapter كامل
+- Local adapter كاحتياطي
+
+### مرحلة 2 (قريباً) 🔄
+- Supabase realtime subscriptions (تحديث تلقائي بين أكثر من جهاز)
+- Auth & multi-user
+- Phase dependencies (تسلسل المراحل)
+- استيراد/تصدير JSON
+
+### مرحلة 3 (لاحقاً) 📅
+- ClickUp adapter كامل (الـ stub موجود الآن)
+- Webhooks: ClickUp → Cloudflare Worker → Supabase
+- Phase ↔ ClickUp Task auto-sync
+- Custom statuses mapping
+
+---
+
+## 🐛 استكشاف الأخطاء
+
+### «فشل الاتصال بـ Supabase»
+- تأكد من الإنترنت
+- افحص `config.js` — `SUPABASE.url` و `SUPABASE.anon`
+- التطبيق سيتحول تلقائياً للوضع المحلي (`localStorage`)
+
+### الـ Gantt لا يظهر
+- المشروع يجب أن يكون من نوع «مشروع» (وليس «مبادرة»)
+- يجب أن يكون له مرحلة واحدة على الأقل بتواريخ صحيحة
+
+### تغييرات لا تُحفظ في DB
+- افحص الـ console — رسائل خطأ من Supabase
+- تأكد أن RLS policies مفعّلة وتسمح بالـ write
+
+---
+
+## 🤝 المساهمة
+
+هذا الريبو لمنظومة — Baseerh الورشة الاستراتيجية.  
+أي تطوير لاحق يتم على branch منفصل ثم merge للـ main.
+
+---
+
+**صُنع بـ ❤️ لـ منظومة · بصيرة · 2026**

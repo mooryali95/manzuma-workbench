@@ -1,0 +1,102 @@
+/* ═══════════════════════════════════════════════════════════════
+   tokens.css · Design system tokens
+   منظومة Strategic Workbench
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  /* ─── Surfaces ─── */
+  --canvas:        #FAF7F0;
+  --paper:         #FFFFFF;
+  --soft:          #F1ECDF;
+  --softer:        #F7F3E8;
+  --softest:       #FCFAF3;
+
+  /* ─── Lines ─── */
+  --line:          rgba(60,40,10,0.09);
+  --line-strong:   rgba(60,40,10,0.18);
+  --line-vstrong:  rgba(60,40,10,0.28);
+
+  /* ─── Ink (text) ─── */
+  --ink-1:         #1A1815;
+  --ink-2:         #4A4640;
+  --ink-3:         #857F75;
+  --ink-4:         #B5AFA3;
+
+  /* ─── Portfolio colors ─── */
+  --pf-foundation-ink: #8B6914;
+  --pf-foundation-bg:  #FBF5E4;
+  --pf-foundation-mid: #D4B978;
+
+  --pf-growth-ink:     #085041;
+  --pf-growth-bg:      #E1F5EE;
+  --pf-growth-mid:     #1D9E75;
+
+  --pf-zero-ink:       #3C3489;
+  --pf-zero-bg:        #EEEDFE;
+  --pf-zero-mid:       #7F77DD;
+
+  --pf-uncat-ink:      #4A4640;
+  --pf-uncat-bg:       #F1ECDF;
+  --pf-uncat-mid:      #B5AFA3;
+
+  /* ─── Concept palette (legacy 5 concept-color ramps) ─── */
+  --c1-tint:#EEEDFE; --c1-mid:#AFA9EC; --c1-ink:#3C3489; --c1-line:#7F77DD;
+  --c2-tint:#E1F5EE; --c2-mid:#9FE1CB; --c2-ink:#085041; --c2-line:#1D9E75;
+  --c3-tint:#FAEEDA; --c3-mid:#FAC775; --c3-ink:#633806; --c3-line:#EF9F27;
+  --c4-tint:#E6F1FB; --c4-mid:#B5D4F4; --c4-ink:#0C447C; --c4-line:#378ADD;
+  --c5-tint:#FAECE7; --c5-mid:#F5C4B3; --c5-ink:#712B13; --c5-line:#D85A30;
+
+  /* ─── Institutional gold (entities) ─── */
+  --gold-bg:   #FBF5E4;
+  --gold-mid:  #D4B978;
+  --gold-ink:  #5C4715;
+  --gold-icon: #9B7B2C;
+
+  /* ─── Status / Signal ─── */
+  --good:      #639922;
+  --good-bg:   #EAF3DE;
+  --warn:      #BA7517;
+  --warn-bg:   #FAEEDA;
+  --danger:    #A32D2D;
+  --danger-bg: #FCEBEB;
+  --info:      #378ADD;
+  --info-bg:   #E6F1FB;
+  --idle:      #888780;
+  --idle-bg:   #F1EFE8;
+
+  /* ─── Radii ─── */
+  --r-sm:   6px;
+  --r-md:   8px;
+  --r-lg:   14px;
+  --r-xl:   20px;
+  --r-pill: 999px;
+
+  /* ─── Spacing (4px scale) ─── */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* ─── Shadows ─── */
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:  0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,0.10);
+  --shadow-xl:  0 16px 48px rgba(0,0,0,0.14);
+
+  /* ─── Z-index ─── */
+  --z-toast:    300;
+  --z-modal:    200;
+  --z-drawer:   150;
+  --z-tooltip:  100;
+  --z-header:   50;
+
+  /* ─── Motion ─── */
+  --motion-fast: 120ms;
+  --motion-med:  200ms;
+  --motion-slow: 320ms;
+  --easing:      cubic-bezier(.2,.7,.2,1);
+}

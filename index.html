@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#FAF7F0">
+  <meta name="description" content="ورشة منظومة الاستراتيجية — تصنيف المحافظ، المراحل، Gantt احترافي">
+  <title>منظومة · الورشة الاستراتيجية</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/views.css">
+  <link rel="stylesheet" href="css/gantt.css">
+
+  <!-- App entry (ES Module) -->
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <!-- Loading placeholder before app boots -->
+    <div class="loading-grid">
+      <div class="loading-spinner"></div>
+      <span>جارٍ تحميل التطبيق…</span>
+    </div>
+  </main>
+
+  <!-- Toast container (created lazily, here for early CSS load) -->
+  <div class="toast-container"></div>
+
+  <noscript>
+    <div style="padding:40px;text-align:center;background:#FFF;color:#1A1815;font-family:Tajawal,sans-serif;">
+      <h2>JavaScript مطلوب</h2>
+      <p>هذا التطبيق يعمل بالكامل في المتصفح ويحتاج إلى JavaScript مفعّل.</p>
+    </div>
+  </noscript>
+</body>
+</html>
