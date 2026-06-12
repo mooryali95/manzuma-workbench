@@ -98,10 +98,32 @@ export class Store {
     return links.map(l => map.get(l.entity_id)).filter(Boolean);
   }
   productsOfFormation(formationId) {
-    /* Products AND initiatives can be linked to a formation —
-       both live in bot_entities and carry formation_id. */
+    /* Products, initiatives AND projects (v4.7) can be linked to a
+       formation — all live in wb_items and carry formation_id. */
     const pick = (arr) => (arr || []).filter(p => p.formation_id === formationId && p.is_active !== false);
-    return [...pick(this.state.products), ...pick(this.state.initiatives)];
+    return [...pick(this.state.products), ...pick(this.state.initiatives), ...pick(this.state.projects)];
+  }
+
+  /* ─── تحويل نوع العنصر (v4.7): منتج ⇄ مبادرة ⇄ مشروع ─── */
+  async convertItemKind(item, oldKindUi, newKindUi) {
+    const AR = { product:'منتج', initiative:'مبادرة', project:'مشروع' };
+    const TBL = { product:'products', initiative:'initiatives', project:'projects' };
+    if (oldKindUi === newKindUi) return false;
+    this.assertWrite();
+    await this.actUpdate(TBL[oldKindUi], item.id, { entity_type: AR[newKindUi] });
+    /* نقل السجل بين السلال في الذاكرة */
+    const arrOld = this.state[TBL[oldKindUi]] || [];
+    const idx = arrOld.findIndex(p => String(p.id) === String(item.id));
+    if (idx > -1) {
+      const moved = arrOld.splice(idx, 1)[0];
+      moved.entity_type = AR[newKindUi];
+      (this.state[TBL[newKindUi]] ??= []).push(moved);
+    }
+    await this.logAudit({
+      action:'item_convert', entity_type:newKindUi, entity_id:String(item.id),
+      summary_ar:`تحويل «${item.name}»: ${AR[oldKindUi]} ← ${AR[newKindUi]}`
+    });
+    return true;
   }
   productsOfConcept(conceptId) {
     return (this.state.products || []).filter(p => String(p.parent_id) === String(conceptId) && p.is_active !== false);

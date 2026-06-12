@@ -432,3 +432,31 @@ body[data-wb-role="viewer"] [data-del],
 body[data-wb-role="viewer"] [data-edit]{
   display:none !important;
 }
+
+
+/* ─── الفوتر (v4.7) ─────────────────────────────────────────────── */
+.shell-footer{
+  max-width:1280px; margin:30px auto 18px; padding:14px 24px;
+  text-align:center; font-size:10.5px; color:var(--ink-4, var(--ink-3));
+  border-top:1px solid var(--line);
+  display:flex; justify-content:center; gap:6px; align-items:center;
+}
+.shell-footer .pb-name{ font-weight:700; color:var(--ink-3); min-width:8px; }
+
+/* ─── طي/توسيع العمود الجانبي (v4.7) ────────────────────────────── */
+.pool{ transition:width .22s ease, padding .22s ease; }
+.pool .pool-header{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.pool-toggle{
+  border:1px solid var(--line); background:#FFF; border-radius:8px;
+  width:26px; height:26px; cursor:pointer; font-size:11px; color:var(--ink-3);
+  flex:0 0 26px; display:flex; align-items:center; justify-content:center;
+}
+.pool-toggle:hover{ background:rgba(0,0,0,0.04); }
+.pool.collapsed{
+  width:48px !important; min-width:48px; padding:12px 8px; overflow:hidden;
+}
+.pool.collapsed .pool-section,
+.pool.collapsed .pool-header-title{ display:none; }
+.pool.collapsed .pool-header{ justify-content:center; }

@@ -127,7 +127,7 @@ function renderFormation(formation, concept, store, router, viewRoot) {
         <div class="dropzone-items"></div>
       </div>
       <div class="dropzone" data-zone="products">
-        <span class="dropzone-label">المنتجات/المبادرات</span>
+        <span class="dropzone-label">المنتجات/المبادرات/المشاريع</span>
         <div class="dropzone-items"></div>
       </div>
     </div>
@@ -207,7 +207,8 @@ function renderFormation(formation, concept, store, router, viewRoot) {
   }
   wireDropZone(productsZone, 'product', async (payload) => {
     try {
-      const tbl = payload.kind === 'initiative' ? 'initiatives' : 'products';
+      const tbl = payload.kind === 'initiative' ? 'initiatives'
+                : payload.kind === 'project' ? 'projects' : 'products';
       await store.actUpdate(tbl, payload.id, { formation_id: formation.id });
       await store.logAudit({ action:'product_to_formation', entity_type:tbl.replace(/s$/,''), entity_id: payload.id, summary_ar:`ربط منتج بالتشكيل «${formation.name_ar}»` });
       toastSuccess('تم الربط');
@@ -305,8 +306,12 @@ function addFormation(store, router, concept, viewRoot, params) {
 function renderPool(store, router, viewRoot) {
   const pool = document.createElement('aside');
   pool.className = 'pool';
+  if (localStorage.getItem('wb_pool_collapsed') === '1') pool.classList.add('collapsed');
   pool.innerHTML = `
-    <div class="pool-header">العمود الجانبي</div>
+    <div class="pool-header">
+      <span class="pool-header-title">العمود الجانبي</span>
+      <button class="pool-toggle" title="تصغير / توسيع">${pool.classList.contains('collapsed') ? '⮜' : '⮞'}</button>
+    </div>
 
     <div class="pool-section" data-pool="individuals">
       <div class="pool-section-head">
@@ -330,7 +335,22 @@ function renderPool(store, router, viewRoot) {
       </div>
       <div class="pool-items"></div>
     </div>
+
+    <div class="pool-section" data-pool="projects">
+      <div class="pool-section-head">
+        <span class="pool-section-title">المشاريع بلا تشكيل <span class="count" id="proj-orphans-count">0</span></span>
+      </div>
+      <div class="pool-items"></div>
+    </div>
   `;
+
+  /* زر الطي/التوسيع */
+  pool.querySelector('.pool-toggle').addEventListener('click', () => {
+    pool.classList.toggle('collapsed');
+    const collapsed = pool.classList.contains('collapsed');
+    localStorage.setItem('wb_pool_collapsed', collapsed ? '1' : '0');
+    pool.querySelector('.pool-toggle').textContent = collapsed ? '⮜' : '⮞';
+  });
 
   /* Individuals pool */
   const indItems = pool.querySelector('[data-pool="individuals"] .pool-items');
@@ -371,6 +391,25 @@ function renderPool(store, router, viewRoot) {
       el.innerHTML = `<span style="flex:1">${escapeText(p.name)}</span><span style="font-size:8px;color:var(--ink-4);">${isInit ? 'مبادرة' : 'منتج'}</span>`;
       wireDraggable(el, { type:'product', id:p.id, kind: isInit ? 'initiative' : 'product' });
       prodItems.appendChild(el);
+    });
+  }
+
+  /* Orphan projects (v4.7) */
+  const projOrphans = (store.state.projects || [])
+    .filter(p => !p.formation_id && p.is_active !== false);
+  pool.querySelector('#proj-orphans-count').textContent = projOrphans.length;
+  const projItems = pool.querySelector('[data-pool="projects"] .pool-items');
+  if (projOrphans.length === 0) {
+    projItems.innerHTML = `<div class="pool-empty">لا توجد مشاريع بلا تشكيل</div>`;
+  } else {
+    projOrphans.forEach(p => {
+      const el = document.createElement('button');
+      el.className = 'card-item';
+      el.dataset.kind = 'project';
+      el.style.cssText = 'padding:7px 10px;font-size:11.5px;text-align:right;display:flex;justify-content:space-between;align-items:center;gap:6px;';
+      el.innerHTML = `<span style="flex:1">${escapeText(p.name)}</span><span style="font-size:8px;color:var(--ink-4);">مشروع</span>`;
+      wireDraggable(el, { type:'product', id:p.id, kind:'project' });
+      projItems.appendChild(el);
     });
   }
 

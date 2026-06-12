@@ -412,6 +412,13 @@ async function openEditItemModal(store, router, item) {
     title: `تعديل «${item.name}»`,
     fields: [
       { name:'name', label:'الاسم', required:true, value: item.name },
+      { name:'_kind', label:'النوع', type:'select', value: item._kind,
+        options: [
+          { value:'product',    label:'منتج' },
+          { value:'initiative', label:'مبادرة' },
+          { value:'project',    label:'مشروع' }
+        ],
+        help:'تحويل النوع ينقل العنصر بين التصنيفات — مراحل المشروع تبقى محفوظة وإن أُخفيت.' },
       { name:'owner', label:'المالك (اختياري)', value: item.owner || '' },
       { name:'description', label:'الوصف', type:'textarea', value: item.description || '' },
       { name:'portfolio_override_id', label:'المحفظة الفعلية (اختياري)', type:'select',
@@ -438,6 +445,10 @@ async function openEditItemModal(store, router, item) {
           const pfName = newPf ? (store.portfolioById(newPf)?.name_ar || newPf) : 'حسب المفهوم الأم';
           await store.logAudit({ action:'item_portfolio_move', entity_type:item._kind, entity_id:String(item.id),
             summary_ar:`نقل «${data.name}» إلى المحفظة الفعلية: ${pfName}` });
+        }
+        /* تحويل النوع (v4.7) */
+        if (data._kind && data._kind !== item._kind) {
+          await store.convertItemKind({ ...item, name: data.name }, item._kind, data._kind);
         }
         await store.logAudit({ action:'item_update', entity_type:item._kind, entity_id:String(item.id), summary_ar:`تعديل «${data.name}»` });
         if (link.changed) {
