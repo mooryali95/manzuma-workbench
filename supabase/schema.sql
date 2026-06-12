@@ -161,3 +161,18 @@ REVOKE ALL ON FUNCTION public.wb_list_clickup_entities() FROM public;
 REVOKE ALL ON FUNCTION public.wb_clickup_list_stats() FROM public;
 GRANT EXECUTE ON FUNCTION public.wb_list_clickup_entities() TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.wb_clickup_list_stats() TO anon, authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════
+-- v4.3 (migration: wb_v43_phase_deps_realtime)
+-- 1) Phase dependencies: single predecessor per phase
+-- 2) Realtime publication on the 9 workbench display tables
+-- ═══════════════════════════════════════════════════════════════
+ALTER TABLE wb_project_phases
+  ADD COLUMN IF NOT EXISTS depends_on_phase_id text
+  REFERENCES wb_project_phases(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
+  ON wb_project_phases(depends_on_phase_id);
+-- Realtime: wb_portfolios, wb_concepts, wb_items, wb_project_phases,
+-- wb_formations, wb_formation_members, wb_formation_entities,
+-- wb_individuals, wb_entities → added to publication supabase_realtime.

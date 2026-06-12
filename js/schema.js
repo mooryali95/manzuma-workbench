@@ -49,7 +49,7 @@ export const SCHEMA = {
     projects:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
     project_phases: {
       pk: 'id',
-      fields: ['id','item_id','name_ar','description_ar','start_date','end_date','status','progress','sort_order','created_at','updated_at']
+      fields: ['id','item_id','name_ar','description_ar','start_date','end_date','status','progress','depends_on_phase_id','sort_order','created_at','updated_at']
     },
     audit_log: {
       pk: 'id',

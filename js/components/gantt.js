@@ -139,6 +139,49 @@ export function renderGantt(root, phases, opts = {}) {
 
   root.appendChild(chart);
 
+  /* ─── Dependency arrows (v4.3) — SVG overlay, RTL-aware ───
+     Predecessor END = LEFT edge of its bar (time flows right→left);
+     dependent START = RIGHT edge of its bar. Elbow path between them. */
+  const hasDeps = phases.some(p => p.depends_on_phase_id);
+  if (hasDeps) {
+    requestAnimationFrame(() => {
+      const chartRect = chart.getBoundingClientRect();
+      if (!chartRect.width) return;
+      const barOf = (id) => chart.querySelector(`.row-bar[data-phase-id="${CSS.escape(String(id))}"]`);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'gantt-deps');
+      svg.setAttribute('width', chartRect.width);
+      svg.setAttribute('height', chartRect.height);
+      svg.innerHTML = `<defs>
+        <marker id="dep-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L8,4 L0,8 z" fill="var(--ink-3)"/>
+        </marker>
+      </defs>`;
+      let drawn = 0;
+      for (const p of phases) {
+        if (!p.depends_on_phase_id) continue;
+        const fromBar = barOf(p.depends_on_phase_id);
+        const toBar = barOf(p.id);
+        if (!fromBar || !toBar) continue;
+        const a = fromBar.getBoundingClientRect();
+        const b = toBar.getBoundingClientRect();
+        const x1 = a.left - chartRect.left;            /* end of predecessor */
+        const y1 = a.top - chartRect.top + a.height / 2;
+        const x2 = b.right - chartRect.left;           /* start of dependent */
+        const y2 = b.top - chartRect.top + b.height / 2;
+        const midX = (x2 >= x1) ? x1 - 8 : (x1 + x2) / 2;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d',
+          `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2 + 2} ${y2}`);
+        path.setAttribute('marker-end', 'url(#dep-arrow)');
+        svg.appendChild(path);
+        drawn++;
+      }
+      if (drawn) chart.appendChild(svg);
+    });
+  }
+
   /* ─── Add-phase row ─── */
   if (opts.onAddPhase) {
     const addRow = document.createElement('div');

@@ -47,6 +47,7 @@ export class SupabaseAdapter extends DataAdapter {
   constructor() {
     super();
     this.client = null;
+    this.rtChannel = null;
   }
 
   async init() {
@@ -210,6 +211,66 @@ export class SupabaseAdapter extends DataAdapter {
     const { error } = await this.client.from('wb_baselines').delete().eq('id', id);
     if (error) throw error;
     return true;
+  }
+
+  /* ─── Realtime (v4.3) ────────────────────────────────────────── */
+  /* One channel listening to all workbench display tables.
+     The callback receives the raw postgres_changes payload;
+     debouncing / self-echo suppression is the Store's concern. */
+  async subscribe(callback) {
+    if (this.rtChannel) await this.unsubscribe();
+    const tables = [
+      'wb_portfolios','wb_concepts','wb_items','wb_project_phases',
+      'wb_formations','wb_formation_members','wb_formation_entities',
+      'wb_individuals','wb_entities'
+    ];
+    let ch = this.client.channel('wb-realtime');
+    for (const table of tables) {
+      ch = ch.on('postgres_changes', { event:'*', schema:'public', table }, callback);
+    }
+    this.rtChannel = ch;
+    return new Promise((resolve) => {
+      ch.subscribe((status) => resolve(status === 'SUBSCRIBED'));
+      setTimeout(() => resolve(false), 8000);  /* never hang boot */
+    });
+  }
+
+  async unsubscribe() {
+    if (this.rtChannel) {
+      await this.client.removeChannel(this.rtChannel);
+      this.rtChannel = null;
+    }
+  }
+
+  /* ─── Snapshot import (v4.3 — backup restore via upsert) ─────── */
+  /* Restores data tables only. audit_log/baselines are history and
+     are intentionally NOT imported. Items are merged back into
+     wb_items with their stored entity_type. */
+  async importSnapshot(snap) {
+    const c = this.client;
+    const counts = {};
+    const up = async (dbTbl, rows, key = 'id') => {
+      if (!rows || !rows.length) { counts[dbTbl] = 0; return; }
+      for (let i = 0; i < rows.length; i += 200) {
+        const { error } = await c.from(dbTbl).upsert(rows.slice(i, i + 200), { onConflict: key });
+        if (error) throw new Error(dbTbl + ': ' + error.message);
+      }
+      counts[dbTbl] = rows.length;
+    };
+    /* Order respects FKs: parents before children */
+    await up('wb_portfolios',  snap.portfolios);
+    await up('wb_individuals', snap.individuals);
+    await up('wb_entities',    snap.entities);
+    await up('wb_concepts',    snap.concepts);
+    const items = [
+      ...(snap.products || []), ...(snap.initiatives || []), ...(snap.projects || [])
+    ].map(({ _kind, ...r }) => r);
+    await up('wb_items', items);
+    await up('wb_formations', snap.formations);
+    await up('wb_formation_members',  snap.formation_members,  'formation_id,individual_id');
+    await up('wb_formation_entities', snap.formation_entities, 'formation_id,entity_id');
+    await up('wb_project_phases', snap.project_phases);
+    return counts;
   }
 
   /* ─── ClickUp bridge (phase 2 — manual linking, READ-ONLY) ───── */

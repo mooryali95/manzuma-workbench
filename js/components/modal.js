@@ -124,7 +124,7 @@ export function confirm({ title='تأكيد', message='هل أنت متأكد؟'
   ensure();
   modalEl.querySelector('#modal-title').textContent = title;
   const body = modalEl.querySelector('#modal-body');
-  body.innerHTML = `<p style="margin:0;font-size:13px;color:var(--ink-2);line-height:1.7">${escapeText(message)}</p>`;
+  body.innerHTML = `<p style="margin:0;font-size:13px;color:var(--ink-2);line-height:1.7;white-space:pre-line">${escapeText(message)}</p>`;
   modalEl.querySelector('#modal-confirm').textContent = confirmLabel;
   modalEl.querySelector('#modal-confirm').className = 'btn ' + (danger ? 'danger' : 'primary');
   modalEl.querySelector('#modal-cancel').textContent = cancelLabel;

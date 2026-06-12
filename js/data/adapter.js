@@ -42,6 +42,9 @@ export class DataAdapter {
   async listBaselines() { throw new Error('listBaselines() not implemented'); }
   async deleteBaseline(id) { throw new Error('deleteBaseline() not implemented'); }
 
+  /* ─── Snapshot import (backup restore, optional) ─── */
+  async importSnapshot(snapshot) { throw new Error('importSnapshot() not implemented'); }
+
   /* ─── ClickUp bridge (read-only, optional) ─── */
   async listClickUpEntities() { return []; }
   async getClickUpStats() { return []; }

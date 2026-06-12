@@ -23,7 +23,7 @@ import { renderPortfolioDetail } from './views/portfolio.js';
 import { renderProjectDetail } from './views/project.js';
 import { renderWorkbench } from './views/workbench.js';
 import { toastError, toastSuccess } from './components/toast.js';
-import { openForm } from './components/modal.js';
+import { openForm, confirm as confirmDialog } from './components/modal.js';
 import { escapeText as escape } from './utils.js';
 
 let store = null;
@@ -109,11 +109,73 @@ function renderShellHeader(rootHeader) {
         <span class="conn-dot"></span>
         <span id="conn-text">جارٍ الاتصال…</span>
       </div>
+      <button class="btn" id="btn-export" title="تصدير نسخة احتياطية JSON">⇩ تصدير</button>
+      <button class="btn" id="btn-import" title="استيراد نسخة احتياطية JSON">⇪ استيراد</button>
       <button class="btn" id="btn-baseline">🎯 تثبيت Baseline</button>
       <a class="btn" href="#workbench">🛠 الورشة</a>
       <a class="btn" href="#portfolios">📊 المحافظ</a>
     </div>
   `;
+
+  /* تصدير JSON (v4.3) */
+  rootHeader.querySelector('#btn-export').addEventListener('click', () => {
+    try {
+      const snap = store.exportSnapshot();
+      const blob = new Blob([JSON.stringify(snap, null, 2)], { type:'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `manzuma-workbench-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toastSuccess('تم تصدير النسخة الاحتياطية');
+    } catch (e) { toastError('فشل التصدير: ' + e.message); }
+  });
+
+  /* استيراد JSON (v4.3) — معاينة الأعداد ثم تأكيد قبل الدمج */
+  rootHeader.querySelector('#btn-import').addEventListener('click', () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'application/json,.json';
+    inp.addEventListener('change', () => {
+      const file = inp.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        let parsed;
+        try { parsed = JSON.parse(reader.result); }
+        catch { toastError('ملف JSON غير صالح'); return; }
+        if (parsed?.meta?.app !== 'manzuma-workbench' || !parsed.data) {
+          toastError('الملف ليس نسخة احتياطية من الورشة');
+          return;
+        }
+        const d = parsed.data;
+        const n = (k) => (d[k] || []).length;
+        const summary =
+          `المصدر: ${parsed.meta.exported_at?.slice(0,16).replace('T',' ') || '—'}\n` +
+          `${n('portfolios')} محفظة · ${n('concepts')} مفهوم · ` +
+          `${n('products') + n('initiatives') + n('projects')} عنصر · ` +
+          `${n('project_phases')} مرحلة · ${n('formations')} تشكيل · ` +
+          `${n('individuals')} فرد · ${n('entities')} كيان.\n` +
+          `سيتم الدمج بالمعرّف (Upsert) — السجلات المطابقة تُستبدل والجديدة تُضاف، ولا يُحذف شيء.`;
+        confirmDialog({
+          title: 'استيراد نسخة احتياطية',
+          message: summary,
+          confirmLabel: 'استيراد ودمج',
+          onConfirm: async () => {
+            try {
+              await store.importSnapshot(parsed);
+              await store.logAudit({ action:'import_json', entity_type:'system',
+                summary_ar:'استيراد نسخة احتياطية JSON ودمجها' });
+              toastSuccess('تم الاستيراد والدمج');
+              router.refresh();
+            } catch (e) { toastError('فشل الاستيراد: ' + e.message); }
+          }
+        });
+      };
+      reader.readAsText(file);
+    });
+    inp.click();
+  });
 
   rootHeader.querySelector('#btn-baseline').addEventListener('click', () => {
     openForm({
@@ -196,6 +258,16 @@ async function boot() {
 
   /* Initial route */
   router.init(appRoot);
+
+  /* Realtime (v4.3) — تحديث حي بين الأجهزة */
+  if (BACKEND === 'supabase' && adapter.subscribe) {
+    store.startRealtime(() => {
+      toastSuccess('تم تحديث البيانات من جهاز آخر ⟳');
+      router.refresh();
+    }).then(ok => {
+      if (ok) setConn('ok', 'متصل · مزامنة حية');
+    }).catch(() => {});
+  }
 }
 
 /* Run boot when DOM ready */

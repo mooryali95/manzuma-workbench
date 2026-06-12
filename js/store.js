@@ -19,7 +19,11 @@ export class Store {
     this.state = null;
     this.baseline = null;     /* snapshot for change tracking */
     this.subscribers = new Set();
+    this.lastLocalWriteAt = 0;   /* realtime self-echo suppression */
+    this._rtTimer = null;
   }
+
+  markLocalWrite() { this.lastLocalWriteAt = Date.now(); }
 
   /* ─── Lifecycle ─────────────────────────────────────────────── */
   async boot() {
@@ -118,6 +122,7 @@ export class Store {
 
   /* ─── Actions: create / update / remove ─────────────────────── */
   async actCreate(table, record) {
+    this.markLocalWrite();
     const row = await this.adapter.create(table, record);
     if (row) {
       this.state[table] ??= [];
@@ -127,6 +132,7 @@ export class Store {
     return row;
   }
   async actUpdate(table, id, patch) {
+    this.markLocalWrite();
     const row = await this.adapter.update(table, id, patch);
     if (row) {
       const arr = this.state[table] || [];
@@ -137,6 +143,7 @@ export class Store {
     return row;
   }
   async actRemove(table, id) {
+    this.markLocalWrite();
     await this.adapter.remove(table, id);
     if (['concepts','products','initiatives','projects'].includes(table)) {
       /* soft delete — mark inactive in local cache */
@@ -152,6 +159,7 @@ export class Store {
 
   /* ─── Composite actions (M:N) ───────────────────────────────── */
   async actAddMember(formationId, individualId) {
+    this.markLocalWrite();
     if (this.adapter.addMember) {
       await this.adapter.addMember(formationId, individualId);
     }
@@ -162,6 +170,7 @@ export class Store {
     this.emit();
   }
   async actRemoveMember(formationId, individualId) {
+    this.markLocalWrite();
     if (this.adapter.removeMember) {
       await this.adapter.removeMember(formationId, individualId);
     }
@@ -170,6 +179,7 @@ export class Store {
     this.emit();
   }
   async actAddEntityToFormation(formationId, entityId) {
+    this.markLocalWrite();
     if (this.adapter.addFormationEntity) {
       await this.adapter.addFormationEntity(formationId, entityId);
     }
@@ -180,12 +190,57 @@ export class Store {
     this.emit();
   }
   async actRemoveEntityFromFormation(formationId, entityId) {
+    this.markLocalWrite();
     if (this.adapter.removeFormationEntity) {
       await this.adapter.removeFormationEntity(formationId, entityId);
     }
     this.state.formation_entities = (this.state.formation_entities || [])
       .filter(e => !(e.formation_id === formationId && e.entity_id === entityId));
     this.emit();
+  }
+
+  /* ─── Realtime (v4.3) ───────────────────────────────────────── */
+  /* Starts the adapter's realtime channel. Remote changes trigger a
+     debounced full reload; writes made from THIS tab within the last
+     2.5s are treated as self-echo and ignored. */
+  async startRealtime(onRemoteChange) {
+    if (!this.adapter.subscribe) return false;
+    const ok = await this.adapter.subscribe(() => {
+      if (Date.now() - this.lastLocalWriteAt < 2500) return;  /* own echo */
+      clearTimeout(this._rtTimer);
+      this._rtTimer = setTimeout(async () => {
+        try {
+          await this.reload();
+          onRemoteChange?.();
+        } catch (e) { console.warn('realtime reload failed:', e.message); }
+      }, 600);
+    });
+    return ok;
+  }
+
+  /* ─── Export / Import (v4.3) ────────────────────────────────── */
+  exportSnapshot() {
+    const data = structuredClone(this.state);
+    delete data.baselines;   /* history stays server-side */
+    delete data.audit_log;
+    return {
+      meta: {
+        app: 'manzuma-workbench',
+        version: 4,
+        exported_at: new Date().toISOString()
+      },
+      data
+    };
+  }
+
+  async importSnapshot(parsed) {
+    if (!parsed || parsed.meta?.app !== 'manzuma-workbench' || !parsed.data) {
+      throw new Error('ملف غير صالح — ليس نسخة احتياطية من الورشة');
+    }
+    this.markLocalWrite();
+    const counts = await this.adapter.importSnapshot(parsed.data);
+    await this.reload();
+    return counts;
   }
 
   /* ─── Audit ─────────────────────────────────────────────────── */

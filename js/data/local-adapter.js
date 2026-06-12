@@ -110,6 +110,22 @@ export class LocalAdapter extends DataAdapter {
     return baseline;
   }
 
+  async importSnapshot(snap) {
+    const s = readStore();
+    const counts = {};
+    const merge = (key) => {
+      const incoming = snap[key] || [];
+      const byId = new Map((s[key] || []).map(r => [String(r.id ?? (r.formation_id + ':' + (r.individual_id || r.entity_id))), r]));
+      incoming.forEach(r => byId.set(String(r.id ?? (r.formation_id + ':' + (r.individual_id || r.entity_id))), r));
+      s[key] = [...byId.values()];
+      counts[key] = incoming.length;
+    };
+    ['portfolios','individuals','entities','concepts','products','initiatives','projects',
+     'formations','formation_members','formation_entities','project_phases'].forEach(merge);
+    writeStore(s);
+    return counts;
+  }
+
   async listBaselines() {
     const s = readStore();
     return (s.baselines || []).sort((a,b) => (b.created_at || '').localeCompare(a.created_at || ''));

@@ -147,13 +147,15 @@ export function renderProjectDetail(root, store, router, params) {
       <div id="phase-rows"></div>
     `;
     const rowsRoot = listCard.querySelector('#phase-rows');
+    const phaseById = new Map(phases.map(x => [String(x.id), x]));
     phases.forEach(p => {
+      const dep = p.depends_on_phase_id ? phaseById.get(String(p.depends_on_phase_id)) : null;
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;';
       row.innerHTML = `
         <div style="flex:1;min-width:0;">
           <div style="font-weight:500;color:var(--ink-1);">${escapeText(p.name_ar)}</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${escapeText(p.start_date || '?')} ← ${escapeText(p.end_date || '?')}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${escapeText(p.start_date || '?')} ← ${escapeText(p.end_date || '?')}${dep ? ` · <span class="dep-meta">⛓ بعد: ${escapeText(dep.name_ar)}</span>` : ''}</div>
         </div>
         <span class="status-pill" data-s="${p.status}">${statusLabelAr(p.status)}</span>
         <span class="tnum" style="font-size:11px;color:var(--ink-2);min-width:35px;text-align:left;">${p.progress || 0}%</span>
@@ -175,6 +177,39 @@ function findProject(store, id) {
       || (store.state.initiatives || []).find(p => String(p.id) === String(id));
 }
 
+/* ─── Phase dependency helpers (v4.3) ─── */
+/* Phases that would create a cycle if chosen as predecessor of `phase`:
+   phase itself + everything that (transitively) depends on it. */
+function dependencyOptions(phases, phase) {
+  const blocked = new Set(phase ? [String(phase.id)] : []);
+  if (phase) {
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const p of phases) {
+        if (blocked.has(String(p.id))) continue;
+        if (p.depends_on_phase_id && blocked.has(String(p.depends_on_phase_id))) {
+          blocked.add(String(p.id));
+          grew = true;
+        }
+      }
+    }
+  }
+  const options = [{ value:'', label:'— بدون تبعية —' }];
+  phases.filter(p => !blocked.has(String(p.id)))
+        .forEach(p => options.push({ value:String(p.id), label:p.name_ar }));
+  return options;
+}
+
+/* Non-blocking warning when the phase starts before its predecessor ends */
+function warnDependencyDates(phases, depId, startDate) {
+  if (!depId || !startDate) return;
+  const dep = phases.find(p => String(p.id) === String(depId));
+  if (dep?.end_date && startDate < dep.end_date) {
+    toastError(`تنبيه: البداية (${startDate}) قبل نهاية المرحلة السابقة «${dep.name_ar}» (${dep.end_date})`);
+  }
+}
+
 /* ─── Add phase modal ─── */
 function addPhaseModal(store, router, project, root) {
   const phases = store.phasesOfProject(project.id);
@@ -193,6 +228,9 @@ function addPhaseModal(store, router, project, root) {
         options: Object.entries(PHASE_STATUSES).map(([k,v]) => ({ value:k, label:v.label_ar }))
       },
       { name:'progress', label:'نسبة الإنجاز (%)', type:'number', value:0, min:0, max:100 },
+      { name:'depends_on_phase_id', label:'تعتمد على (مرحلة سابقة)', type:'select',
+        value:'', options: dependencyOptions(phases, null),
+        help:'لا تبدأ هذه المرحلة منطقياً قبل اكتمال المرحلة المختارة — يظهر الربط كسهم في Gantt.' },
       { name:'description_ar', label:'وصف (اختياري)', type:'textarea' }
     ],
     confirm: async (data) => {
@@ -211,8 +249,10 @@ function addPhaseModal(store, router, project, root) {
           end_date: data.end_date,
           status: data.status || 'not_started',
           progress: Number(data.progress) || 0,
+          depends_on_phase_id: data.depends_on_phase_id || null,
           sort_order: phases.length
         });
+        warnDependencyDates(phases, data.depends_on_phase_id, data.start_date);
         await store.logAudit({
           action:'phase_create', entity_type:'phase',
           summary_ar:`إضافة مرحلة «${data.name_ar}» للمشروع «${project.name}»`
@@ -225,6 +265,7 @@ function addPhaseModal(store, router, project, root) {
 }
 
 function editPhaseModal(store, router, project, phase, root) {
+  const phases = store.phasesOfProject(project.id);
   openForm({
     title: `تعديل مرحلة «${phase.name_ar}»`,
     fields: [
@@ -235,6 +276,10 @@ function editPhaseModal(store, router, project, phase, root) {
         options: Object.entries(PHASE_STATUSES).map(([k,v]) => ({ value:k, label:v.label_ar }))
       },
       { name:'progress', label:'نسبة الإنجاز (%)', type:'number', value: phase.progress || 0, min:0, max:100 },
+      { name:'depends_on_phase_id', label:'تعتمد على (مرحلة سابقة)', type:'select',
+        value: phase.depends_on_phase_id ? String(phase.depends_on_phase_id) : '',
+        options: dependencyOptions(phases, phase),
+        help:'المراحل التي تعتمد على هذه المرحلة مستبعدة من القائمة لمنع الحلقات.' },
       { name:'description_ar', label:'وصف', type:'textarea', value: phase.description_ar || '' }
     ],
     confirm: async (data) => {
@@ -247,8 +292,10 @@ function editPhaseModal(store, router, project, phase, root) {
           start_date: data.start_date,
           end_date: data.end_date,
           status: data.status,
-          progress: Number(data.progress) || 0
+          progress: Number(data.progress) || 0,
+          depends_on_phase_id: data.depends_on_phase_id || null
         });
+        warnDependencyDates(phases, data.depends_on_phase_id, data.start_date);
         await store.logAudit({ action:'phase_update', entity_type:'phase', summary_ar:`تعديل «${data.name_ar}»` });
         toastSuccess('تم التحديث');
         renderProjectDetail(root, store, router, { id: project.id });

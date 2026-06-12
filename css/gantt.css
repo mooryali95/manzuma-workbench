@@ -187,3 +187,14 @@
 }
 .gantt-empty .ttl{ font-size:13px; color:var(--ink-2); font-weight:500; margin-bottom:6px; }
 .gantt-empty .dsc{ font-size:11px; }
+
+
+/* ─── Phase dependencies (v4.3) ────────────────────────────────── */
+.gantt-deps{
+  position:absolute; inset:0; pointer-events:none; z-index:1;
+}
+.gantt-deps path{
+  fill:none; stroke:var(--ink-3); stroke-width:1.5;
+  stroke-dasharray:4 3; opacity:0.75;
+}
+.dep-meta{ color:var(--c3-ink, #8A6D2F); font-weight:600; }
