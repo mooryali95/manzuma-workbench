@@ -29,7 +29,7 @@ export const SCHEMA = {
     },
     formations: {
       pk: 'id',
-      fields: ['id','concept_entity_id','name_ar','sort_order','created_at','updated_at']
+      fields: ['id','concept_id','name_ar','sort_order','created_at','updated_at']
     },
     formation_members: {
       pk: ['formation_id','individual_id'],
@@ -39,16 +39,17 @@ export const SCHEMA = {
       pk: ['formation_id','entity_id'],
       fields: ['formation_id','entity_id','created_at']
     },
-    concepts: {    /* read-mostly view over bot_entities */
+    concepts: {    /* workbench-native: wb_concepts */
       pk: 'id',
-      fields: ['id','name','entity_type','parent_id','source_list_id','portfolio_id','formation_id','sort_order','is_active','created_at']
+      fields: ['id','name','description','portfolio_id','linked_bot_entity_id','sort_order','is_active','created_at','updated_at']
     },
-    products:   { pk:'id', fields:['id','name','entity_type','parent_id','source_list_id','portfolio_id','formation_id','is_active'] },
-    initiatives:{ pk:'id', fields:['id','name','entity_type','parent_id','source_list_id','portfolio_id','formation_id','is_active'] },
-    projects:   { pk:'id', fields:['id','name','entity_type','parent_id','source_list_id','portfolio_id','formation_id','is_active'] },
+    /* products / initiatives / projects share wb_items (entity_type column) */
+    products:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
+    initiatives:{ pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
+    projects:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
     project_phases: {
       pk: 'id',
-      fields: ['id','project_entity_id','name_ar','description_ar','start_date','end_date','status','progress','sort_order','created_at','updated_at']
+      fields: ['id','item_id','name_ar','description_ar','start_date','end_date','status','progress','sort_order','created_at','updated_at']
     },
     audit_log: {
       pk: 'id',

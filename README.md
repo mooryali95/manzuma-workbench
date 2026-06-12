@@ -1,7 +1,7 @@
 # منظومة · الورشة الاستراتيجية
 
 > Strategic Workbench — تصنيف المحافظ، إدارة التشكيلات، Gantt احترافي بـ RTL  
-> طبقة إضافية فوق قاعدة بيانات Manzuma الحالية، **بدون أي تعديل على البيانات أو الجداول الموجودة**
+> **طبقة مستقلة بالكامل عن ClickUp** — تسجيل مباشر في Supabase عبر جداول `wb_*` الخاصة بها، مع إمكانية ربط يدوي بمشاريع ClickUp لاحقاً عبر `linked_bot_entity_id`
 
 ---
 
@@ -148,25 +148,30 @@ export const BACKEND = 'supabase';  // أو 'local'
 
 تم إنشاؤها بواسطة migration `create_workbench_layer`.
 
-| الجدول | الغرض | الصفوف |
+| الجدول | الغرض | الصفوف (Seed) |
 |---|---|---|
 | `wb_portfolios` | المحافظ الـ 3 | 3 |
-| `wb_individuals` | الأفراد | (تُضاف من الواجهة) |
-| `wb_entities` | الكيانات | (تُضاف من الواجهة) |
-| `wb_formations` | التشكيلات | (تُضاف من الواجهة) |
-| `wb_formation_members` | M:N أفراد↔تشكيل | (تلقائي) |
-| `wb_formation_entities` | M:N كيانات↔تشكيل | (تلقائي) |
-| `wb_project_phases` | مراحل المشاريع | (تُضاف من Gantt) |
+| `wb_concepts` | **المفاهيم — CRUD كامل** | 5 |
+| `wb_items` | **منتج · مبادرة · مشروع (جدول واحد مُنوَّع)** | 28 |
+| `wb_individuals` | الأفراد | 6 |
+| `wb_entities` | الكيانات | 7 |
+| `wb_formations` | التشكيلات | 6 |
+| `wb_formation_members` | M:N أفراد↔تشكيل | 9 |
+| `wb_formation_entities` | M:N كيانات↔تشكيل | 7 |
+| `wb_project_phases` | مراحل المشاريع (Gantt) | 4 |
 | `wb_audit_log` | سجل التغييرات | (تلقائي) |
 | `wb_baselines` | نقاط Baseline | (يدوي) |
 
-### الجداول الموجودة (لم تُمَس)
-`bot_entities`, `pm_snapshots`, `task_activity`, `pm_lists_config`, `maturity_history`, `portfolio_structure`, وجداول البوت — كلها سليمة.
+### المرحلة 2 — جسر ClickUp (v4.2.0) ✅
+- **الربط اليدوي**: من نافذة تعديل أي مفهوم/منتج/مبادرة/مشروع — قائمة اختيار تعرض كل كيانات ClickUp النشطة وتحفظ في `linked_bot_entity_id` (مع تسجيل `clickup_link` / `clickup_unlink` في سجل التغييرات).
+- **بيانات حية**: صفحة المشروع تعرض لوحة إحصاءات (إجمالي · مفتوحة · جارية · متأخرة · مغلقة) من آخر `pm_snapshot` — قراءة فقط.
+- **مؤشرات**: شارة 🔗 على البطاقات والمفاهيم المرتبطة + فلتر «مرتبط / غير مرتبط» داخل المحفظة.
+- **الأمان**: `bot_entities` و `pm_snapshots` يبقيان مقفلين بـ RLS بالكامل — الوصول حصراً عبر دالتي `SECURITY DEFINER`:
+  `wb_list_clickup_entities()` و `wb_clickup_list_stats()` (EXECUTE فقط لـ anon). لا كتابة على طبقة ClickUp إطلاقاً.
 
-### الإضافات على `bot_entities`
-- `portfolio_id` (FK → wb_portfolios)
-- `formation_id` (FK → wb_formations)
-- `sort_order` (INT)
+### الفصل الكامل عن ClickUp
+- جداول طبقة ClickUp (`bot_entities`, `pm_snapshots`, `pm_lists_config`, `task_activity`, `maturity_history`, وجداول البوت) **لا تُقرأ ولا تُكتب** من الورشة — أُزيلت كل الأعمدة المضافة سابقاً وعادت لأصلها.
+- نقطة الاتصال الوحيدة المستقبلية: `linked_bot_entity_id` (عمود اختياري في `wb_concepts` و `wb_items`) لربط عنصر من الورشة بمشروع ClickUp **يدوياً عبر قائمة اختيار** — المرحلة الثانية.
 
 ---
 

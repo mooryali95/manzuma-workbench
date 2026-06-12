@@ -8,20 +8,29 @@
  */
 
 import { renderFilterBar } from '../components/filter-bar.js';
-import { openForm } from '../components/modal.js';
+import { openForm, confirm as confirmDialog } from '../components/modal.js';
 import { toastSuccess, toastError } from '../components/toast.js';
-import { countsForConcept, projectProgress, projectStatus, statusLabelAr } from '../models.js';
+import { countsForConcept, projectProgress, projectStatus, statusLabelAr, uid } from '../models.js';
 import { escapeText } from '../utils.js';
+import {
+  loadClickUpBridge, clickupLinkField, parseLinkChange,
+  linkAuditEntry, linkBadgeHtml
+} from '../components/clickup-link.js';
+
+const TBL_BY_KIND = { product:'products', initiative:'initiatives', project:'projects' };
 
 const UNCAT = 'uncat';
 const filterState = {
   search: '',
   kind: 'all',   /* all | product | initiative | project */
-  status: 'all'  /* all | not_started | in_progress | completed | blocked */
+  status: 'all', /* all | not_started | in_progress | completed | blocked */
+  link: 'all'    /* all | linked | unlinked  (ClickUp bridge) */
 };
 
 export function renderPortfolioDetail(root, store, router, params) {
   root.innerHTML = '';
+  /* Preload ClickUp directory in the background (badges/tooltips/modals) */
+  loadClickUpBridge(store).catch(() => {});
   const pfId = params.pf || UNCAT;
   const pf = (store.state.portfolios || []).find(p => p.id === pfId) || {
     id: UNCAT, name_ar:'غير مصنف', description_ar:'مفاهيم لم تُصنَّف بعد',
@@ -85,12 +94,21 @@ export function renderPortfolioDetail(root, store, router, params) {
           { value:'completed',   label:'مكتملة' },
           { value:'blocked',     label:'متعثرة' }
         ]
+      },
+      {
+        key:'link', label:'ClickUp', value: filterState.link,
+        options:[
+          { value:'all',      label:'الكل' },
+          { value:'linked',   label:'🔗 مرتبط' },
+          { value:'unlinked', label:'غير مرتبط' }
+        ]
       }
     ],
     onChange: (newState) => {
       filterState.search = newState.search;
       filterState.kind = newState.chips.kind;
       filterState.status = newState.chips.status;
+      filterState.link = newState.chips.link;
       renderConceptSections(sectionsRoot, store, router, concepts);
     }
   });
@@ -152,6 +170,10 @@ function renderConceptSections(root, store, router, concepts) {
         return projectStatus(store, i.id) === filterState.status;
       });
     }
+    if (filterState.link !== 'all') {
+      const wantLinked = filterState.link === 'linked';
+      items = items.filter(i => Boolean(i.linked_bot_entity_id) === wantLinked);
+    }
 
     if (items.length === 0 && filterState.search) continue;
 
@@ -165,7 +187,7 @@ function renderConceptSections(root, store, router, concepts) {
     sec.innerHTML = `
       <div class="concept-section-head">
         <div class="lhs">
-          <div class="cs-name">${escapeText(c.name)}</div>
+          <div class="cs-name">${escapeText(c.name)} ${linkBadgeHtml(store, c)}</div>
           <div class="cs-stats">
             <span><b>${counts.products}</b> منتج</span>
             <span><b>${counts.initiatives}</b> مبادرة</span>
@@ -175,7 +197,9 @@ function renderConceptSections(root, store, router, concepts) {
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
           <a class="btn ghost sm" href="#workbench?concept=${encodeURIComponent(c.id)}">🛠 ورشة الهيكل</a>
-          <button class="btn ghost sm" data-act="add-project" data-concept-id="${c.id}">+ مبادرة/مشروع</button>
+          <button class="btn ghost sm" data-act="add-project" data-concept-id="${c.id}">+ عنصر جديد</button>
+          <button class="btn ghost sm" data-act="edit-concept" title="تعديل المفهوم">✎</button>
+          <button class="btn ghost sm" data-act="del-concept" title="حذف المفهوم" style="color:var(--danger)">حذف</button>
           <button class="toggle" aria-label="طيّ">▾</button>
         </div>
       </div>
@@ -195,6 +219,16 @@ function renderConceptSections(root, store, router, concepts) {
     sec.querySelector('[data-act="add-project"]').addEventListener('click', (e) => {
       e.stopPropagation();
       openAddProjectModal(store, router, c);
+    });
+
+    /* Edit / delete concept */
+    sec.querySelector('[data-act="edit-concept"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditConceptModal(store, router, c);
+    });
+    sec.querySelector('[data-act="del-concept"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteConcept(store, router, c);
     });
 
     /* Items grid */
@@ -241,15 +275,29 @@ function renderItemCard(item, store, router) {
     <div class="head">
       <div style="flex:1;min-width:0">
         <div class="name">${escapeText(item.name)}</div>
-        <div class="meta">${escapeText(item.source_list_id || '—')}</div>
+        <div class="meta">${escapeText(item.owner || item.description || '—')}</div>
       </div>
       <div class="badges">
         <span class="kind-badge" data-kind="${item._kind}">${kindLabel}</span>
         ${statusBadge}
+        ${linkBadgeHtml(store, item)}
       </div>
     </div>
     ${progressBar}
+    <div style="display:flex;justify-content:flex-end;gap:2px;margin-top:6px;">
+      <button class="btn-icon sm" data-act="edit-item" title="تعديل">✎</button>
+      <button class="btn-icon sm" data-act="del-item" title="حذف" style="color:var(--danger)">×</button>
+    </div>
   `;
+
+  card.querySelector('[data-act="edit-item"]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openEditItemModal(store, router, item);
+  });
+  card.querySelector('[data-act="del-item"]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteItem(store, router, item);
+  });
 
   card.addEventListener('click', () => {
     if (item._kind === 'project' || item._kind === 'initiative') {
@@ -271,22 +319,30 @@ function openAddProjectModal(store, router, concept) {
       { name:'kind', label:'النوع', type:'select', value:'مبادرة',
         options: [
           { value:'مبادرة', label:'مبادرة (فكرة لم تبدأ)' },
-          { value:'مشروع',  label:'مشروع (بدأ التنفيذ)' }
+          { value:'مشروع',  label:'مشروع (بدأ التنفيذ)' },
+          { value:'منتج',   label:'منتج' }
         ]
-      }
+      },
+      { name:'owner', label:'المالك (اختياري)' },
+      { name:'description', label:'الوصف (اختياري)', type:'textarea' }
     ],
     confirm: async (data) => {
       if (!data.name) return false;
       try {
-        const tbl = data.kind === 'مشروع' ? 'projects' : 'initiatives';
+        const tbl = data.kind === 'مشروع' ? 'projects'
+                  : data.kind === 'منتج'  ? 'products'
+                  : 'initiatives';
         const row = await store.actCreate(tbl, {
+          id: uid('itm'),
           name: data.name,
           parent_id: concept.id,
           entity_type: data.kind,
+          owner: data.owner || null,
+          description: data.description || null,
           is_active: true
         });
         await store.logAudit({
-          action: data.kind === 'مشروع' ? 'project_create' : 'initiative_create',
+          action: 'item_create',
           entity_type: tbl.replace(/s$/,''),
           entity_id: String(row.id),
           after_data: row,
@@ -301,6 +357,102 @@ function openAddProjectModal(store, router, concept) {
   });
 }
 
+/* ─── Concept edit / delete ─── */
+async function openEditConceptModal(store, router, concept) {
+  await loadClickUpBridge(store).catch(() => {});
+  openForm({
+    title: `تعديل «${concept.name}»`,
+    fields: [
+      { name:'name', label:'الاسم', required:true, value: concept.name },
+      { name:'description', label:'الوصف', type:'textarea', value: concept.description || '' },
+      clickupLinkField(store, concept.linked_bot_entity_id)
+    ],
+    confirm: async (data) => {
+      if (!data.name) return false;
+      try {
+        const link = parseLinkChange(concept, data.linked_bot_entity_id);
+        await store.actUpdate('concepts', concept.id, {
+          name: data.name,
+          description: data.description || null,
+          linked_bot_entity_id: link.next
+        });
+        await store.logAudit({ action:'concept_update', entity_type:'concept', entity_id:String(concept.id), summary_ar:`تعديل مفهوم «${data.name}»` });
+        if (link.changed) {
+          await store.logAudit(linkAuditEntry('concept', { ...concept, name: data.name }, store, link.next));
+        }
+        toastSuccess('تم التحديث');
+        router.refresh();
+      } catch (e) { toastError('فشل: ' + e.message); }
+    }
+  });
+}
+
+function deleteConcept(store, router, concept) {
+  confirmDialog({
+    title: 'حذف المفهوم',
+    message: `هل أنت متأكد من حذف «${concept.name}»؟ سيُخفى المفهوم وكل محتواه من الواجهة (يبقى محفوظاً في قاعدة البيانات).`,
+    danger: true,
+    confirmLabel: 'حذف',
+    onConfirm: async () => {
+      try {
+        await store.actRemove('concepts', concept.id);
+        await store.logAudit({ action:'concept_remove', entity_type:'concept', entity_id:String(concept.id), summary_ar:`حذف مفهوم «${concept.name}»` });
+        toastSuccess('تم الحذف');
+        router.refresh();
+      } catch (e) { toastError('فشل: ' + e.message); }
+    }
+  });
+}
+
+/* ─── Item edit / delete ─── */
+async function openEditItemModal(store, router, item) {
+  await loadClickUpBridge(store).catch(() => {});
+  openForm({
+    title: `تعديل «${item.name}»`,
+    fields: [
+      { name:'name', label:'الاسم', required:true, value: item.name },
+      { name:'owner', label:'المالك (اختياري)', value: item.owner || '' },
+      { name:'description', label:'الوصف', type:'textarea', value: item.description || '' },
+      clickupLinkField(store, item.linked_bot_entity_id)
+    ],
+    confirm: async (data) => {
+      if (!data.name) return false;
+      try {
+        const link = parseLinkChange(item, data.linked_bot_entity_id);
+        await store.actUpdate(TBL_BY_KIND[item._kind], item.id, {
+          name: data.name,
+          owner: data.owner || null,
+          description: data.description || null,
+          linked_bot_entity_id: link.next
+        });
+        await store.logAudit({ action:'item_update', entity_type:item._kind, entity_id:String(item.id), summary_ar:`تعديل «${data.name}»` });
+        if (link.changed) {
+          await store.logAudit(linkAuditEntry(item._kind, { ...item, name: data.name }, store, link.next));
+        }
+        toastSuccess('تم التحديث');
+        router.refresh();
+      } catch (e) { toastError('فشل: ' + e.message); }
+    }
+  });
+}
+
+function deleteItem(store, router, item) {
+  confirmDialog({
+    title: 'حذف العنصر',
+    message: `هل أنت متأكد من حذف «${item.name}»؟`,
+    danger: true,
+    confirmLabel: 'حذف',
+    onConfirm: async () => {
+      try {
+        await store.actRemove(TBL_BY_KIND[item._kind], item.id);
+        await store.logAudit({ action:'item_remove', entity_type:item._kind, entity_id:String(item.id), summary_ar:`حذف «${item.name}»` });
+        toastSuccess('تم الحذف');
+        router.refresh();
+      } catch (e) { toastError('فشل: ' + e.message); }
+    }
+  });
+}
+
 /* ─── Helpers ─── */
 function kpiSmall(label, value) {
   return `<div class="kpi" style="padding:8px 12px;">
@@ -309,10 +461,10 @@ function kpiSmall(label, value) {
   </div>`;
 }
 function computePortfolioStats(store, concepts) {
-  const ids = new Set(concepts.map(c => Number(c.id)));
-  const products = (store.state.products || []).filter(p => ids.has(Number(p.parent_id)));
-  const initiatives = (store.state.initiatives || []).filter(p => ids.has(Number(p.parent_id)));
-  const projects = (store.state.projects || []).filter(p => ids.has(Number(p.parent_id)));
+  const ids = new Set(concepts.map(c => String(c.id)));
+  const products = (store.state.products || []).filter(p => ids.has(String(p.parent_id)) && p.is_active !== false);
+  const initiatives = (store.state.initiatives || []).filter(p => ids.has(String(p.parent_id)) && p.is_active !== false);
+  const projects = (store.state.projects || []).filter(p => ids.has(String(p.parent_id)) && p.is_active !== false);
 
   let total = 0, count = 0;
   for (const proj of projects) {

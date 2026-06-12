@@ -1,0 +1,29 @@
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache / build artifacts (none today, but defensive)
+node_modules/
+dist/
+build/
+.cache/
+
+# Local env (in case you add one later)
+.env
+.env.local
+.env.*.local
+
+# Backups
+*.bak
+*.orig

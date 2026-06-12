@@ -14,6 +14,10 @@ import { openForm, confirm as confirmDialog } from '../components/modal.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 import { PHASE_STATUSES, statusLabelAr, uid, projectProgress, projectStatus } from '../models.js';
 import { escapeText, addMonths } from '../utils.js';
+import {
+  loadClickUpBridge, clickupLinkField, parseLinkChange,
+  linkAuditEntry, clickupPanelHtml
+} from '../components/clickup-link.js';
 
 export function renderProjectDetail(root, store, router, params) {
   root.innerHTML = '';
@@ -29,7 +33,7 @@ export function renderProjectDetail(root, store, router, params) {
   }
 
   /* ─── Locate parent concept + portfolio ─── */
-  const concept = (store.state.concepts || []).find(c => Number(c.id) === Number(project.parent_id))
+  const concept = (store.state.concepts || []).find(c => String(c.id) === String(project.parent_id))
     || { id: null, name:'—', portfolio_id: null };
   const portfolio = (store.state.portfolios || []).find(p => p.id === concept.portfolio_id) || {
     id:'uncat', name_ar:'غير مصنف'
@@ -77,6 +81,16 @@ export function renderProjectDetail(root, store, router, params) {
   header.querySelector('[data-act="toggle-kind"]').addEventListener('click', () => toggleKind(store, router, project));
   header.querySelector('[data-act="edit"]').addEventListener('click', () => editProject(store, router, project, root));
   header.querySelector('[data-act="delete"]').addEventListener('click', () => deleteProject(store, router, project));
+
+  /* ─── ClickUp live panel (phase 2 — read-only) ─── */
+  if (project.linked_bot_entity_id) {
+    const cuRoot = document.createElement('div');
+    cuRoot.innerHTML = '<div class="cu-panel"><div class="cu-panel-note">جارٍ تحميل بيانات ClickUp…</div></div>';
+    root.appendChild(cuRoot);
+    loadClickUpBridge(store)
+      .then(() => { cuRoot.innerHTML = clickupPanelHtml(store, project); })
+      .catch(() => { cuRoot.innerHTML = '<div class="cu-panel"><div class="cu-panel-note">تعذّر تحميل بيانات ClickUp.</div></div>'; });
+  }
 
   if (isInitiative) {
     /* ─── Initiative view (idea/proposal, no timeline) ─── */
@@ -190,7 +204,7 @@ function addPhaseModal(store, router, project, root) {
       try {
         await store.actCreate('project_phases', {
           id: uid('ph'),
-          project_entity_id: project.id,
+          item_id: project.id,
           name_ar: data.name_ar,
           description_ar: data.description_ar || null,
           start_date: data.start_date,
@@ -298,18 +312,26 @@ function toggleKind(store, router, project) {
   });
 }
 
-function editProject(store, router, project, root) {
+async function editProject(store, router, project, root) {
+  await loadClickUpBridge(store).catch(() => {});
   openForm({
     title: `تعديل «${project.name}»`,
     fields: [
-      { name:'name', label:'الاسم', required:true, value: project.name }
+      { name:'name', label:'الاسم', required:true, value: project.name },
+      clickupLinkField(store, project.linked_bot_entity_id)
     ],
     confirm: async (data) => {
       if (!data.name) return false;
       const tbl = project.entity_type === 'مشروع' ? 'projects' : 'initiatives';
       try {
-        await store.actUpdate(tbl, project.id, { name: data.name });
-        await store.logAudit({ action:'project_rename', entity_type:tbl.replace(/s$/,''), summary_ar:`إعادة تسمية «${project.name}» → «${data.name}»` });
+        const link = parseLinkChange(project, data.linked_bot_entity_id);
+        await store.actUpdate(tbl, project.id, { name: data.name, linked_bot_entity_id: link.next });
+        if (data.name !== project.name) {
+          await store.logAudit({ action:'project_rename', entity_type:tbl.replace(/s$/,''), summary_ar:`إعادة تسمية «${project.name}» → «${data.name}»` });
+        }
+        if (link.changed) {
+          await store.logAudit(linkAuditEntry(tbl.replace(/s$/,''), { ...project, name: data.name }, store, link.next));
+        }
         toastSuccess('تم التحديث');
         renderProjectDetail(root, store, router, { id: project.id });
       } catch (e) { toastError('فشل: ' + e.message); }

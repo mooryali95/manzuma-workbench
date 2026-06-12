@@ -6,7 +6,9 @@
 
 import { wireDraggable, wireDropZone } from '../components/drag-drop.js';
 import { toastSuccess, toastError } from '../components/toast.js';
-import { countsForConcept } from '../models.js';
+import { openForm } from '../components/modal.js';
+import { linkBadgeHtml } from '../components/clickup-link.js';
+import { countsForConcept, uid } from '../models.js';
 import { escapeText, timeAgo } from '../utils.js';
 
 const UNCAT = 'uncat';
@@ -107,6 +109,14 @@ export function renderPortfolios(root, store, router) {
       }
     });
 
+    /* Add-concept button */
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn-add';
+    addBtn.style.cssText = 'width:100%;margin-top:10px;justify-content:center;padding:8px;';
+    addBtn.textContent = '+ مفهوم جديد';
+    addBtn.addEventListener('click', () => openAddConceptModal(store, router, pf, root));
+    col.appendChild(addBtn);
+
     kanban.appendChild(col);
   });
 
@@ -132,7 +142,7 @@ function renderConceptCard(concept, store, router) {
   card.innerHTML = `
     <div class="cc-head">
       <div class="cc-name">${escapeText(concept.name)}</div>
-      ${ /* could insert delta badge here if diff from baseline */ '' }
+      ${linkBadgeHtml(store, concept)}
     </div>
     <div class="cc-stats">
       <span><b>${counts.formations}</b> تشكيل</span>
@@ -182,7 +192,7 @@ function computeStats(s) {
   /* Phase-based progress avg */
   let total = 0, count = 0;
   for (const proj of projects) {
-    const phases = (s.project_phases || []).filter(ph => Number(ph.project_entity_id) === Number(proj.id));
+    const phases = (s.project_phases || []).filter(ph => String(ph.item_id) === String(proj.id));
     if (phases.length) {
       const avg = phases.reduce((a,b)=> a + (b.progress||0), 0) / phases.length;
       total += avg; count++;
@@ -195,5 +205,36 @@ function computeStats(s) {
     projects: projects.length,
     avgProgress: count ? Math.round(total / count) : 0
   };
+}
+
+/* ─── Add concept modal ─── */
+function openAddConceptModal(store, router, pf, root) {
+  const isUncat = pf.id === 'uncat';
+  openForm({
+    title: isUncat ? 'مفهوم جديد (غير مصنف)' : `مفهوم جديد في «${pf.name_ar}»`,
+    fields: [
+      { name:'name', label:'اسم المفهوم', required:true, placeholder:'مثل: «بناء الأهلية»' },
+      { name:'description', label:'الوصف (اختياري)', type:'textarea' }
+    ],
+    confirm: async (data) => {
+      if (!data.name) return false;
+      try {
+        const row = await store.actCreate('concepts', {
+          id: uid('cn'),
+          name: data.name,
+          description: data.description || null,
+          portfolio_id: isUncat ? null : pf.id,
+          is_active: true,
+          sort_order: (store.state.concepts || []).length
+        });
+        await store.logAudit({
+          action:'concept_create', entity_type:'concept', entity_id:String(row.id),
+          summary_ar:`إنشاء مفهوم «${data.name}»`
+        });
+        toastSuccess(`تم إنشاء «${data.name}»`);
+        renderPortfolios(root, store, router);
+      } catch (e) { toastError('فشل الإنشاء: ' + e.message); }
+    }
+  });
 }
 

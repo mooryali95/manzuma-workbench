@@ -289,7 +289,7 @@ function addFormation(store, router, concept, viewRoot, params) {
       try {
         await store.actCreate('formations', {
           id: uid('frm'),
-          concept_entity_id: concept.id,
+          concept_id: concept.id,
           name_ar: data.name_ar,
           sort_order: store.formationsForConcept(concept.id).length
         });
@@ -387,12 +387,33 @@ function renderPoolInd(ind, store, viewRoot, router) {
       ${ ind.sector ? `<span class="sector">${escapeText(ind.sector)}</span>` : '' }
       ${escapeText(ind.name_ar)}
     </span>
-    <span data-edit style="font-size:11px;color:var(--ink-3);cursor:pointer;font-weight:700;padding:0 4px;">✎</span>
+    <span style="display:inline-flex;gap:2px;">
+      <span data-edit style="font-size:11px;color:var(--ink-3);cursor:pointer;font-weight:700;padding:0 4px;" title="تعديل">✎</span>
+      <span data-del style="font-size:12px;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;" title="حذف">×</span>
+    </span>
   `;
   wireDraggable(el, { type:'individual', id: ind.id });
   el.querySelector('[data-edit]').addEventListener('click', (e) => {
     e.stopPropagation();
     editIndividual(ind, store, viewRoot, router);
+  });
+  el.querySelector('[data-del]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    confirmDialog({
+      title: 'حذف فرد',
+      message: `حذف «${ind.name_ar}» نهائياً؟ سيُزال من كل التشكيلات المرتبط بها.`,
+      danger: true,
+      confirmLabel: 'حذف',
+      onConfirm: async () => {
+        try {
+          await store.actRemove('individuals', ind.id);
+          store.state.formation_members = (store.state.formation_members || []).filter(m => m.individual_id !== ind.id);
+          await store.logAudit({ action:'individual_remove', entity_type:'individual', summary_ar:`حذف فرد «${ind.name_ar}»` });
+          toastSuccess('تم الحذف');
+          renderWorkbench(viewRoot, store, router, {});
+        } catch (err) { toastError('فشل: ' + err.message); }
+      }
+    });
   });
   return el;
 }
@@ -407,12 +428,33 @@ function renderPoolEnt(ent, store, viewRoot, router) {
       ${ ent.kind ? `<span class="kind">${escapeText(ent.kind)}</span>` : '' }
       ${escapeText(ent.name_ar)}
     </span>
-    <span data-edit style="font-size:11px;color:var(--ink-3);cursor:pointer;font-weight:700;padding:0 4px;">✎</span>
+    <span style="display:inline-flex;gap:2px;">
+      <span data-edit style="font-size:11px;color:var(--ink-3);cursor:pointer;font-weight:700;padding:0 4px;" title="تعديل">✎</span>
+      <span data-del style="font-size:12px;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;" title="حذف">×</span>
+    </span>
   `;
   wireDraggable(el, { type:'entity', id: ent.id });
   el.querySelector('[data-edit]').addEventListener('click', (e) => {
     e.stopPropagation();
     editEntity(ent, store, viewRoot, router);
+  });
+  el.querySelector('[data-del]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    confirmDialog({
+      title: 'حذف كيان',
+      message: `حذف «${ent.name_ar}» نهائياً؟ سيُزال من كل التشكيلات المرتبط بها.`,
+      danger: true,
+      confirmLabel: 'حذف',
+      onConfirm: async () => {
+        try {
+          await store.actRemove('entities', ent.id);
+          store.state.formation_entities = (store.state.formation_entities || []).filter(x => x.entity_id !== ent.id);
+          await store.logAudit({ action:'entity_remove', entity_type:'entity', summary_ar:`حذف كيان «${ent.name_ar}»` });
+          toastSuccess('تم الحذف');
+          renderWorkbench(viewRoot, store, router, {});
+        } catch (err) { toastError('فشل: ' + err.message); }
+      }
+    });
   });
   return el;
 }

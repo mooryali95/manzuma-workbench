@@ -59,14 +59,14 @@ export class Store {
   get s() { return this.state; }
 
   conceptsInPortfolio(pfId) {
-    return (this.state.concepts || []).filter(c => c.portfolio_id === pfId);
+    return (this.state.concepts || []).filter(c => c.portfolio_id === pfId && c.is_active !== false);
   }
   conceptsUnassigned() {
-    return (this.state.concepts || []).filter(c => !c.portfolio_id);
+    return (this.state.concepts || []).filter(c => !c.portfolio_id && c.is_active !== false);
   }
   formationsForConcept(conceptId) {
     return (this.state.formations || [])
-      .filter(f => Number(f.concept_entity_id) === Number(conceptId));
+      .filter(f => String(f.concept_id) === String(conceptId));
   }
   membersOfFormation(formationId) {
     const links = (this.state.formation_members || []).filter(m => m.formation_id === formationId);
@@ -85,17 +85,17 @@ export class Store {
     return [...pick(this.state.products), ...pick(this.state.initiatives)];
   }
   productsOfConcept(conceptId) {
-    return (this.state.products || []).filter(p => Number(p.parent_id) === Number(conceptId));
+    return (this.state.products || []).filter(p => String(p.parent_id) === String(conceptId) && p.is_active !== false);
   }
   initiativesOfConcept(conceptId) {
-    return (this.state.initiatives || []).filter(i => Number(i.parent_id) === Number(conceptId));
+    return (this.state.initiatives || []).filter(i => String(i.parent_id) === String(conceptId) && i.is_active !== false);
   }
   projectsOfConcept(conceptId) {
-    return (this.state.projects || []).filter(p => Number(p.parent_id) === Number(conceptId));
+    return (this.state.projects || []).filter(p => String(p.parent_id) === String(conceptId) && p.is_active !== false);
   }
   phasesOfProject(projectId) {
     return (this.state.project_phases || [])
-      .filter(p => Number(p.project_entity_id) === Number(projectId))
+      .filter(p => String(p.item_id) === String(projectId))
       .sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }
   childrenOf(parentId) {
@@ -104,7 +104,7 @@ export class Store {
     const out = [];
     const push = (arr, kind) => {
       arr.forEach(x => {
-        if (Number(x.parent_id) === Number(parentId) && !ids.has(x.id)) {
+        if (String(x.parent_id) === String(parentId) && !ids.has(x.id)) {
           ids.add(x.id);
           out.push({ ...x, _kind: kind });
         }
