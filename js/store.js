@@ -74,6 +74,9 @@ export class Store {
   /* ─── Selectors ─────────────────────────────────────────────── */
   get s() { return this.state; }
 
+  /* alias توافقي (v4.5.2) — يحمي من أي مزيج نسخ مخبأة بين الملفات */
+  conceptsOfPortfolio(pfId) { return this.conceptsInPortfolio(pfId); }
+
   conceptsInPortfolio(pfId) {
     return (this.state.concepts || []).filter(c => c.portfolio_id === pfId && c.is_active !== false);
   }
