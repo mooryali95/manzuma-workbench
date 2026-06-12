@@ -1,0 +1,14 @@
+# Cloudflare Pages — منع تقادم ملفات الكود بعد كل نشر
+# no-cache = يعيد التحقق عبر ETag (رخيص: 304 إن لم يتغير، جديد إن تغيّر)
+
+/js/*
+  Cache-Control: no-cache
+
+/css/*
+  Cache-Control: no-cache
+
+/config.js
+  Cache-Control: no-cache
+
+/*.html
+  Cache-Control: no-cache
