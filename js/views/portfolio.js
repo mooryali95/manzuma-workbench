@@ -281,6 +281,7 @@ function renderItemCard(item, store, router) {
         <span class="kind-badge" data-kind="${item._kind}">${kindLabel}</span>
         ${statusBadge}
         ${linkBadgeHtml(store, item)}
+        ${item.portfolio_override_id ? `<span class="cu-badge" style="background:#FBF3E2;color:#8A6D2F;border-color:#EBD9AE" title="منقول لمحفظة فعلية مختلفة">📍 ${escapeText(store.portfolioById(item.portfolio_override_id)?.name_ar || '')}</span>` : ''}
       </div>
     </div>
     ${progressBar}
@@ -413,18 +414,31 @@ async function openEditItemModal(store, router, item) {
       { name:'name', label:'الاسم', required:true, value: item.name },
       { name:'owner', label:'المالك (اختياري)', value: item.owner || '' },
       { name:'description', label:'الوصف', type:'textarea', value: item.description || '' },
+      { name:'portfolio_override_id', label:'المحفظة الفعلية (اختياري)', type:'select',
+        value: item.portfolio_override_id ? String(item.portfolio_override_id) : '',
+        options: [{ value:'', label:'— حسب المفهوم الأم (افتراضي) —' },
+                  ...store.state.portfolios.map(p => ({ value:String(p.id), label:p.name_ar }))],
+        help:'انقل هذا العنصر وحده لمرحلة نضج مختلفة — يبقى ابن مفهومه ويُحتسب في المحفظة المختارة.' },
       clickupLinkField(store, item.linked_bot_entity_id)
     ],
     confirm: async (data) => {
       if (!data.name) return false;
       try {
         const link = parseLinkChange(item, data.linked_bot_entity_id);
+        const newPf = data.portfolio_override_id || null;
+        const pfChanged = String(newPf || '') !== String(item.portfolio_override_id || '');
         await store.actUpdate(TBL_BY_KIND[item._kind], item.id, {
           name: data.name,
           owner: data.owner || null,
           description: data.description || null,
+          portfolio_override_id: newPf,
           linked_bot_entity_id: link.next
         });
+        if (pfChanged) {
+          const pfName = newPf ? (store.portfolioById(newPf)?.name_ar || newPf) : 'حسب المفهوم الأم';
+          await store.logAudit({ action:'item_portfolio_move', entity_type:item._kind, entity_id:String(item.id),
+            summary_ar:`نقل «${data.name}» إلى المحفظة الفعلية: ${pfName}` });
+        }
         await store.logAudit({ action:'item_update', entity_type:item._kind, entity_id:String(item.id), summary_ar:`تعديل «${data.name}»` });
         if (link.changed) {
           await store.logAudit(linkAuditEntry(item._kind, { ...item, name: data.name }, store, link.next));

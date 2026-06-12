@@ -109,6 +109,38 @@ export class Store {
   projectsOfConcept(conceptId) {
     return (this.state.projects || []).filter(p => String(p.parent_id) === String(conceptId) && p.is_active !== false);
   }
+  /* ─── المحفظة الفعلية (v4.5) ─── */
+  allItems() {
+    const out = [];
+    const push = (arr, kind) => (arr || []).forEach(x => {
+      if (x.is_active !== false) out.push({ ...x, _kind: kind });
+    });
+    push(this.state.products, 'product');
+    push(this.state.initiatives, 'initiative');
+    push(this.state.projects, 'project');
+    return out;
+  }
+  conceptById(id) {
+    return (this.state.concepts || []).find(c => String(c.id) === String(id)) || null;
+  }
+  portfolioById(id) {
+    return (this.state.portfolios || []).find(p => String(p.id) === String(id)) || null;
+  }
+  /* portfolio_override_id إن وُجد، وإلا محفظة المفهوم الأم */
+  effectivePortfolioId(item) {
+    if (item?.portfolio_override_id) return String(item.portfolio_override_id);
+    const concept = this.conceptById(item?.parent_id);
+    return concept?.portfolio_id ? String(concept.portfolio_id) : null;
+  }
+  /* عناصر واردة لمحفظة عبر التجاوز (مفهومها الأم في محفظة أخرى) */
+  incomingItemsOfPortfolio(pfId) {
+    return this.allItems().filter(i => {
+      if (!i.portfolio_override_id || String(i.portfolio_override_id) !== String(pfId)) return false;
+      const home = this.conceptById(i.parent_id)?.portfolio_id;
+      return String(home) !== String(pfId);
+    });
+  }
+
   phasesOfProject(projectId) {
     return (this.state.project_phases || [])
       .filter(p => String(p.item_id) === String(projectId))

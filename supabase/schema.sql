@@ -191,3 +191,7 @@ CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
 -- v4.4.1 (migration: wb_v441_fix_signup):
 -- حذف trigger قديم (wb_first_owner) كان يتعارض مع wb_on_auth_user_created،
 -- واستبدال قيد الأدوار ليشمل: owner, editor, viewer, pending.
+
+-- v4.5 (migration: wb_v45_item_portfolio_override):
+-- wb_items.portfolio_override_id → wb_portfolios(id) ON DELETE SET NULL
+-- المحفظة الفعلية للعنصر = override ?? محفظة المفهوم الأم.

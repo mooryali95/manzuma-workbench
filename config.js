@@ -16,7 +16,7 @@ export const SUPABASE = {
 
 export const APP = {
   name_ar: 'منظومة · الورشة الاستراتيجية',
-  version: '4.4.1',
+  version: '4.5.0',
   schema_version: 4,
   locale: 'ar-SA',
   default_view: 'portfolios'   // 'portfolios' | 'workbench'

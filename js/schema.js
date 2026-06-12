@@ -44,9 +44,9 @@ export const SCHEMA = {
       fields: ['id','name','description','portfolio_id','linked_bot_entity_id','sort_order','is_active','created_at','updated_at']
     },
     /* products / initiatives / projects share wb_items (entity_type column) */
-    products:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
-    initiatives:{ pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
-    projects:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','sort_order','is_active'] },
+    products:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','portfolio_override_id','sort_order','is_active'] },
+    initiatives:{ pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','portfolio_override_id','sort_order','is_active'] },
+    projects:   { pk:'id', fields:['id','name','description','owner','entity_type','parent_id','parent_item_id','formation_id','linked_bot_entity_id','portfolio_override_id','sort_order','is_active'] },
     project_phases: {
       pk: 'id',
       fields: ['id','item_id','name_ar','description_ar','start_date','end_date','status','progress','depends_on_phase_id','sort_order','created_at','updated_at']

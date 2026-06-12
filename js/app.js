@@ -22,6 +22,7 @@ import { renderPortfolios } from './views/portfolios.js';
 import { renderPortfolioDetail } from './views/portfolio.js';
 import { renderProjectDetail } from './views/project.js';
 import { renderWorkbench } from './views/workbench.js';
+import { renderTree } from './views/tree.js';
 import { AuthManager, ROLE_LABELS } from './auth.js';
 import { renderLogin, renderPending } from './views/login.js';
 import { toastError, toastSuccess } from './components/toast.js';
@@ -82,6 +83,9 @@ class Router {
     this.appRoot.classList.add('fade-up');
 
     switch (view) {
+      case 'tree':
+        renderTree(this.appRoot, store, this);
+        break;
       case 'portfolios':
         renderPortfolios(this.appRoot, store, this);
         break;
@@ -142,6 +146,7 @@ function renderShellHeader(rootHeader) {
       <button class="btn" id="btn-export" title="تصدير نسخة احتياطية JSON">⇩ تصدير</button>
       ${canWrite ? '<button class="btn" id="btn-import" title="استيراد نسخة احتياطية JSON">⇪ استيراد</button>' : ''}
       ${canWrite ? '<button class="btn" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
+      <a class="btn" href="#tree">🌳 الشجرة</a>
       <a class="btn" href="#workbench">🛠 الورشة</a>
       <a class="btn" href="#portfolios">📊 المحافظ</a>
     </div>

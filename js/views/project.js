@@ -365,6 +365,11 @@ async function editProject(store, router, project, root) {
     title: `تعديل «${project.name}»`,
     fields: [
       { name:'name', label:'الاسم', required:true, value: project.name },
+      { name:'portfolio_override_id', label:'المحفظة الفعلية (اختياري)', type:'select',
+        value: project.portfolio_override_id ? String(project.portfolio_override_id) : '',
+        options: [{ value:'', label:'— حسب المفهوم الأم (افتراضي) —' },
+                  ...store.state.portfolios.map(p => ({ value:String(p.id), label:p.name_ar }))],
+        help:'انقل هذا العنصر وحده لمرحلة نضج مختلفة — يبقى ابن مفهومه ويُحتسب في المحفظة المختارة.' },
       clickupLinkField(store, project.linked_bot_entity_id)
     ],
     confirm: async (data) => {
@@ -372,7 +377,14 @@ async function editProject(store, router, project, root) {
       const tbl = project.entity_type === 'مشروع' ? 'projects' : 'initiatives';
       try {
         const link = parseLinkChange(project, data.linked_bot_entity_id);
-        await store.actUpdate(tbl, project.id, { name: data.name, linked_bot_entity_id: link.next });
+        const newPf = data.portfolio_override_id || null;
+        const pfChanged = String(newPf || '') !== String(project.portfolio_override_id || '');
+        await store.actUpdate(tbl, project.id, { name: data.name, portfolio_override_id: newPf, linked_bot_entity_id: link.next });
+        if (pfChanged) {
+          const pfName = newPf ? (store.portfolioById(newPf)?.name_ar || newPf) : 'حسب المفهوم الأم';
+          await store.logAudit({ action:'item_portfolio_move', entity_type:tbl.replace(/s$/,''), entity_id:String(project.id),
+            summary_ar:`نقل «${data.name}» إلى المحفظة الفعلية: ${pfName}` });
+        }
         if (data.name !== project.name) {
           await store.logAudit({ action:'project_rename', entity_type:tbl.replace(/s$/,''), summary_ar:`إعادة تسمية «${project.name}» → «${data.name}»` });
         }
