@@ -19,7 +19,7 @@ export function renderLogin(root, auth, onSuccess) {
     root.innerHTML = `
       <div class="auth-wrap">
         <div class="auth-card">
-          <div class="auth-logo">منظومة</div>
+          <div class="auth-logo">قيمة</div>
           <h1 class="auth-title">${escapeText(APP.name_ar)}</h1>
           <p class="auth-sub">${mode === 'signin' ? 'سجّل دخولك للمتابعة' : 'أنشئ حساباً جديداً'}</p>
 

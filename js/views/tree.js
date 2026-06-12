@@ -97,7 +97,7 @@ function buildModel(store) {
   const progressPool = [];
 
   for (const pf of portfolios) {
-    const concepts = store.conceptsOfPortfolio(pf.id).map(concept => {
+    const concepts = store.conceptsInPortfolio(pf.id).map(concept => {
       const own = store.childrenOf(concept.id);              /* عناصر المفهوم */
       const staying = [], moved = [];
       for (const raw of own) {
