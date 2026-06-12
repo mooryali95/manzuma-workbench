@@ -102,6 +102,23 @@ class Router {
 
 /* ─── Header (global app header outside the view) ───────────────── */
 function renderShellHeader(rootHeader) {
+  /* v4.4.1: قبل اكتمال المصادقة تُعرض ترويسة مصغّرة بلا أدوات */
+  const authed = BACKEND === 'local' || (auth && auth.canRead);
+  if (!authed) {
+    rootHeader.innerHTML = `
+      <div class="lhs">
+        <h1 class="h1">${escape(APP.name_ar)}</h1>
+        <p class="sub">v${APP.version}</p>
+      </div>
+      <div class="rhs">
+        <div class="conn" id="conn" data-state="loading">
+          <span class="conn-dot"></span>
+          <span id="conn-text">جارٍ الاتصال…</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
   const canWrite = auth ? auth.canWrite : true;
   const userChip = auth?.user ? `
       <div class="user-chip" title="${escape(auth.user.email)}">

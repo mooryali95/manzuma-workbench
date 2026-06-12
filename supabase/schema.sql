@@ -187,3 +187,7 @@ CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
 --      wb_audit_log إضافة-فقط. RPCs (owner): wb_list_users / wb_set_user_role.
 -- ClickUp RPCs: EXECUTE للمصادَقين فقط (سُحبت من anon).
 -- النص الكامل في تاريخ الترحيلات على Supabase.
+
+-- v4.4.1 (migration: wb_v441_fix_signup):
+-- حذف trigger قديم (wb_first_owner) كان يتعارض مع wb_on_auth_user_created،
+-- واستبدال قيد الأدوار ليشمل: owner, editor, viewer, pending.
