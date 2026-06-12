@@ -29,12 +29,25 @@ export class AuthManager {
   }
 
   async fetchRole() {
-    if (!this.user) { this.role = null; return null; }
+    if (!this.user) { this.role = null; this.allowedViews = null; return null; }
     const { data, error } = await this.client
-      .from('wb_user_roles').select('role').eq('user_id', this.user.id).maybeSingle();
+      .from('wb_user_roles').select('role, allowed_views')
+      .eq('user_id', this.user.id).maybeSingle();
     if (error) { console.warn('role fetch failed:', error.message); this.role = null; return null; }
     this.role = data?.role || 'pending';
+    this.allowedViews = data?.allowed_views || null;   /* null = الكل */
     return this.role;
+  }
+
+  /* v4.8: هل يحق له رؤية صفحة (مفاتيح: tree | portfolios | workbench) */
+  canSee(viewKey) {
+    if (this.isOwner) return true;            /* المالك يرى كل شيء دائماً */
+    if (!this.allowedViews) return true;       /* null = الكل */
+    return this.allowedViews.includes(viewKey);
+  }
+  firstAllowedView() {
+    const order = ['tree', 'portfolios', 'workbench'];
+    return order.find(v => this.canSee(v)) || 'tree';
   }
 
   async signIn(email, password) {

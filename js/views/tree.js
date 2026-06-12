@@ -17,7 +17,14 @@ const KIND_ICON  = { product:'📦', initiative:'🚀', project:'🏗' };
 const today = () => new Date().toISOString().slice(0, 10);
 
 /* حالة العرض خلال الجلسة */
-const ocState = { openCards: new Set(), search: '' };
+const ocState = {
+  openCards: new Set(),
+  openPfs: new Set(),                                  /* لطور القائمة */
+  search: '',
+  layout: localStorage.getItem('oc_layout') || 'auto', /* auto|wide|grid|stack */
+  zoom: Number(localStorage.getItem('oc_zoom')) || 1
+};
+let _ro = null;  /* ResizeObserver */
 
 export function renderTree(root, store, router) {
   root.innerHTML = '';
@@ -28,8 +35,20 @@ export function renderTree(root, store, router) {
   tools.className = 'tree-tools';
   tools.innerHTML = `
     <input type="search" id="oc-search" placeholder="🔎 بحث…" value="${escapeText(ocState.search)}">
-    <button class="btn sm" id="oc-expand">⊞ فتح كل البطاقات</button>
-    <button class="btn sm" id="oc-collapse">⊟ إغلاقها</button>
+    <span class="oc-seg" id="oc-layouts">
+      <button data-l="auto"  class="btn sm">تلقائي</button>
+      <button data-l="wide"  class="btn sm">🖥 شجرة</button>
+      <button data-l="grid"  class="btn sm">▦ شبكة</button>
+      <button data-l="stack" class="btn sm">☰ قائمة</button>
+    </span>
+    <span class="oc-seg" id="oc-zoom">
+      <button class="btn sm" data-z="out">−</button>
+      <span class="oc-zoom-val tnum">${Math.round(ocState.zoom * 100)}%</span>
+      <button class="btn sm" data-z="in">+</button>
+      <button class="btn sm" data-z="fit">ملاءمة</button>
+    </span>
+    <button class="btn sm" id="oc-expand">⊞ فتح الكل</button>
+    <button class="btn sm" id="oc-collapse">⊟ إغلاق</button>
   `;
   root.appendChild(tools);
 
@@ -54,6 +73,61 @@ export function renderTree(root, store, router) {
     ocState.openCards.clear();
     draw();
   });
+
+  /* أطوار العرض */
+  const markLayout = () => tools.querySelectorAll('#oc-layouts .btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.l === ocState.layout));
+  markLayout();
+  tools.querySelectorAll('#oc-layouts .btn').forEach(b =>
+    b.addEventListener('click', () => {
+      ocState.layout = b.dataset.l;
+      localStorage.setItem('oc_layout', ocState.layout);
+      markLayout(); draw();
+    }));
+
+  /* التكبير (للطور الواسع) */
+  const zoomVal = tools.querySelector('.oc-zoom-val');
+  const setZoom = (z) => {
+    ocState.zoom = Math.min(1.4, Math.max(0.5, Math.round(z * 100) / 100));
+    localStorage.setItem('oc_zoom', ocState.zoom);
+    zoomVal.textContent = Math.round(ocState.zoom * 100) + '%';
+    applyZoom(wrap);
+  };
+  tools.querySelector('[data-z="in"]').addEventListener('click',  () => setZoom(ocState.zoom + 0.1));
+  tools.querySelector('[data-z="out"]').addEventListener('click', () => setZoom(ocState.zoom - 0.1));
+  tools.querySelector('[data-z="fit"]').addEventListener('click', () => {
+    const content = wrap.querySelector('.oc-content');
+    if (!content) return;
+    setZoom(Math.min(1.2, wrap.clientWidth / (content.scrollWidth + 24)));
+  });
+
+  /* إعادة التموضع عند تغير الأبعاد (آيباد، تدوير، تغيير نافذة) */
+  if (_ro) _ro.disconnect();
+  _ro = new ResizeObserver(() => {
+    if (resolveLayout(wrap) !== wrap.dataset.layout) draw();
+    else requestAnimationFrame(() => drawConnectors(wrap));
+  });
+  _ro.observe(wrap);
+}
+
+/* الطور الفعلي: اليدوي إن حُدد، وإلا حسب العرض */
+function resolveLayout(wrap) {
+  if (ocState.layout !== 'auto') return ocState.layout;
+  const w = wrap.clientWidth || window.innerWidth;
+  if (w >= 1000) return 'wide';
+  if (w >= 620)  return 'grid';
+  return 'stack';
+}
+
+function applyZoom(wrap) {
+  const content = wrap.querySelector('.oc-content');
+  if (!content) return;
+  const z = wrap.dataset.layout === 'wide' ? ocState.zoom : 1;
+  content.style.transform = z === 1 ? '' : `scale(${z})`;
+  content.style.transformOrigin = 'top right';
+  /* عوّض ارتفاع الحاوية بعد التحجيم */
+  wrap.style.height = z === 1 ? '' : (content.scrollHeight * z + 20) + 'px';
+  requestAnimationFrame(() => drawConnectors(wrap));
 }
 
 /* ─── النموذج ─────────────────────────────────────────────────────── */
@@ -149,25 +223,97 @@ function drawChart(wrap, model, store, router) {
     .map(p => ({ ...p, visCards: p.cards.filter(cardMatches) }))
     .filter(p => !q || hit(p.pf.name_ar) || p.visCards.length);
 
-  const R = model.rootAgg;
-  wrap.innerHTML = `
-    <div class="oc-root-row">
-      <div class="oc-root">
-        <div class="oc-root-name">🏛 ${escapeText(APP.name_ar)}</div>
-        <div class="oc-root-meta">
-          ${R.avg}% إنجاز · ${R.total} عنصر · ${R.phases} مرحلة
-          ${R.overdue ? ` · <b class="late">${R.overdue} متأخرة</b>` : ''}
-        </div>
-      </div>
-    </div>
-    <div class="oc-stem"></div>
-    <div class="oc-cols">
-      ${visPortfolios.map(p => columnHtml(p, store, q, hit)).join('')}
-    </div>
-    ${visPortfolios.length ? '' : `<div class="empty-state"><div class="icon">🔎</div><div class="title">لا نتائج</div></div>`}
-  `;
+  const layout = resolveLayout(wrap);
+  wrap.dataset.layout = layout;
 
-  /* تفاعلات */
+  const R = model.rootAgg;
+  const rootCard = `
+    <div class="oc-root">
+      <div class="oc-root-name">🏛 ${escapeText(APP.name_ar)}</div>
+      <div class="oc-root-meta">
+        ${R.avg}% إنجاز · ${R.total} عنصر · ${R.phases} مرحلة
+        ${R.overdue ? ` · <b class="late">${R.overdue} متأخرة</b>` : ''}
+      </div>
+    </div>`;
+
+  if (layout === 'stack') {
+    /* ☰ أكورديون عمودي للجوال */
+    wrap.innerHTML = `
+      <div class="oc-content oc-stack">
+        ${rootCard}
+        ${visPortfolios.map(p => {
+          const open = q ? true : ocState.openPfs.has(String(p.pf.id));
+          return `
+          <div class="oc-acc ${open ? 'open' : ''}">
+            <div class="oc-pf-head" style="--pfc:${escapeText(p.pf.color || '#8A6D2F')};--pfbg:${escapeText(p.pf.bg_color || '#F6F1E4')}"
+                 data-acc="${escapeText(p.pf.id)}">
+              <span class="oc-pf-name">${open ? '▾' : '◂'} ${escapeText(p.pf.name_ar)}</span>
+              <span class="oc-pf-meta tnum">${p.agg.avg}%${p.agg.overdue ? ` | <b>${p.agg.overdue} متأخرة</b>` : ''}</span>
+            </div>
+            ${open ? `<div class="oc-cards">${p.visCards.map(c => cardHtml(c, p.pf, store, q, hit)).join('') || '<div class="oc-empty">لا مفاهيم</div>'}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+  } else {
+    /* 🖥 شجرة (موصلات SVG) أو ▦ شبكة */
+    wrap.innerHTML = `
+      <div class="oc-content oc-${layout}">
+        <div class="oc-root-row">${rootCard}</div>
+        <div class="oc-cols">
+          ${visPortfolios.map(p => columnHtml(p, store, q, hit)).join('')}
+        </div>
+        ${layout === 'wide' ? '<svg class="oc-svg" aria-hidden="true"></svg>' : ''}
+      </div>
+      ${visPortfolios.length ? '' : '<div class="empty-state"><div class="icon">🔎</div><div class="title">لا نتائج</div></div>'}`;
+  }
+
+  wireInteractions(wrap, model, store, router);
+  applyZoom(wrap);
+  requestAnimationFrame(() => drawConnectors(wrap));
+}
+
+/* موصلات SVG مرسومة من المواضع الفعلية — لا تنكسر مع أي أبعاد */
+function drawConnectors(wrap) {
+  const content = wrap.querySelector('.oc-content');
+  const svg = wrap.querySelector('.oc-svg');
+  if (!content || !svg || wrap.dataset.layout !== 'wide') { svg?.replaceChildren(); return; }
+
+  const rootEl = content.querySelector('.oc-root');
+  const heads = [...content.querySelectorAll('.oc-pf-head')];
+  if (!rootEl || !heads.length) { svg.replaceChildren(); return; }
+
+  const W = content.scrollWidth, H = content.scrollHeight;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  /* offsetLeft/Top غير متأثرة بـ transform:scale — مثالية هنا */
+  const center = (el) => {
+    let x = el.offsetWidth / 2, y = 0, n = el;
+    while (n && n !== content) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+    return { x, y: y, h: el.offsetHeight };
+  };
+
+  const r = center(rootEl);
+  const rootBottom = { x: r.x, y: r.y + r.h };
+  const pts = heads.map(h => { const c = center(h); return { x: c.x, y: c.y }; });
+  const busY = rootBottom.y + Math.max(14, (Math.min(...pts.map(p => p.y)) - rootBottom.y) / 2);
+
+  const xs = pts.map(p => p.x);
+  const seg = (d) => `<path d="${d}"/>`;
+  let paths = seg(`M ${rootBottom.x} ${rootBottom.y} V ${busY}`);
+  if (pts.length > 1) paths += seg(`M ${Math.min(...xs)} ${busY} H ${Math.max(...xs)}`);
+  for (const p of pts) paths += seg(`M ${p.x} ${busY} V ${p.y}`);
+
+  svg.innerHTML = `<g class="oc-lines">${paths}</g>`;
+}
+
+function wireInteractions(wrap, model, store, router) {
+  wrap.querySelectorAll('[data-acc]').forEach(el =>
+    el.addEventListener('click', () => {
+      const k = String(el.dataset.acc);
+      ocState.openPfs.has(k) ? ocState.openPfs.delete(k) : ocState.openPfs.add(k);
+      drawChart(wrap, model, store, router);
+    }));
   wrap.querySelectorAll('[data-oc-toggle]').forEach(el => {
     el.addEventListener('click', () => {
       const k = el.dataset.ocToggle;
@@ -175,7 +321,7 @@ function drawChart(wrap, model, store, router) {
       drawChart(wrap, model, store, router);
     });
   });
-  wrap.querySelectorAll('[data-nav-pf]').forEach(el =>
+  wrap.querySelectorAll('[data-nav-pf]:not([data-acc])').forEach(el =>
     el.addEventListener('click', () => router.navigate('portfolio', { pf: el.dataset.navPf })));
   wrap.querySelectorAll('[data-nav-concept]').forEach(el =>
     el.addEventListener('click', (e) => {
@@ -197,7 +343,6 @@ function columnHtml(p, store, q, hit) {
   const bg = pf.bg_color || '#F6F1E4';
   return `
   <div class="oc-col">
-    <div class="oc-link"></div>
     <div class="oc-pf-head" style="--pfc:${escapeText(color)};--pfbg:${escapeText(bg)}"
          data-nav-pf="${escapeText(pf.id)}" role="link" tabindex="0">
       <span class="oc-pf-name">${escapeText(pf.name_ar)}</span>

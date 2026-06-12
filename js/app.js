@@ -25,7 +25,7 @@ import { renderWorkbench } from './views/workbench.js';
 import { renderTree } from './views/tree.js';
 import { AuthManager, ROLE_LABELS } from './auth.js';
 import { renderLogin, renderPending } from './views/login.js';
-import { toastError, toastSuccess } from './components/toast.js';
+import { toastError, toastSuccess, toastInfo } from './components/toast.js';
 import { openForm, confirm as confirmDialog } from './components/modal.js';
 import { escapeText as escape } from './utils.js';
 
@@ -75,7 +75,17 @@ class Router {
   }
   render() {
     if (!this.appRoot || !store?.state) return;
-    const { view, params } = this.currentRoute;
+    let { view, params } = this.currentRoute;
+
+    /* v4.8: حارس الصفحات المسموحة */
+    const VIEW_KEY = { tree:'tree', portfolios:'portfolios', portfolio:'portfolios',
+                       project:'portfolios', workbench:'workbench' };
+    if (auth && VIEW_KEY[view] && !auth.canSee(VIEW_KEY[view])) {
+      const fallback = auth.firstAllowedView();
+      toastInfo('هذه الصفحة غير متاحة لحسابك');
+      this.navigate(fallback);
+      return;
+    }
 
     /* Save scroll position per view */
     this.appRoot.classList.remove('fade-up');
@@ -146,9 +156,9 @@ function renderShellHeader(rootHeader) {
       <button class="btn" id="btn-export" title="تصدير نسخة احتياطية JSON">⇩ تصدير</button>
       ${canWrite ? '<button class="btn" id="btn-import" title="استيراد نسخة احتياطية JSON">⇪ استيراد</button>' : ''}
       ${canWrite ? '<button class="btn" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
-      <a class="btn" href="#tree">🌳 الشجرة</a>
-      <a class="btn" href="#workbench">🛠 الورشة</a>
-      <a class="btn" href="#portfolios">📊 المحافظ</a>
+      ${!auth || auth.canSee('tree') ? '<a class="btn" href="#tree">🌳 الشجرة</a>' : ''}
+      ${!auth || auth.canSee('workbench') ? '<a class="btn" href="#workbench">🛠 الورشة</a>' : ''}
+      ${!auth || auth.canSee('portfolios') ? '<a class="btn" href="#portfolios">📊 المحافظ</a>' : ''}
     </div>
   `;
 
@@ -250,30 +260,67 @@ async function openUsersModal() {
   if (!users.length) { toastError('لا يوجد مستخدمون بعد'); return; }
 
   const roleOpts = Object.entries(ROLE_LABELS).map(([v, l]) => ({ value: v, label: l }));
-  const fields = users.map(u => ({
-    name: u.user_id,
-    label: `${u.email}${u.last_sign_in_at ? '' : ' · لم يدخل بعد'}`,
-    type: 'select',
-    value: u.role,
-    options: roleOpts
-  }));
+  const VIEW_PRESETS = {
+    all:             { label:'كل الصفحات',        views:null },
+    tree:            { label:'الشجرة فقط',        views:['tree'] },
+    tree_portfolios: { label:'الشجرة والمحافظ',   views:['tree','portfolios'] },
+    portfolios:      { label:'المحافظ فقط',       views:['portfolios'] },
+    workbench:       { label:'الورشة فقط',        views:['workbench'] }
+  };
+  const presetOf = (views) => {
+    if (!views) return 'all';
+    const key = Object.keys(VIEW_PRESETS).find(k => {
+      const v = VIEW_PRESETS[k].views;
+      return v && v.length === views.length && v.every(x => views.includes(x));
+    });
+    return key || 'all';
+  };
+  const viewOpts = Object.entries(VIEW_PRESETS).map(([v, p]) => ({ value: v, label: p.label }));
+  const fields = users.flatMap(u => [
+    {
+      name: u.user_id,
+      label: `${u.email}${u.last_sign_in_at ? '' : ' · لم يدخل بعد'} — الدور`,
+      type: 'select',
+      value: u.role,
+      options: roleOpts
+    },
+    {
+      name: u.user_id + '::views',
+      label: '↳ الصفحات المتاحة',
+      type: 'select',
+      value: presetOf(u.allowed_views),
+      options: viewOpts
+    }
+  ]);
 
   openForm({
     title: `إدارة المستخدمين (${users.length})`,
     fields,
     confirmLabel: 'حفظ الأدوار',
     confirm: async (data) => {
-      const changes = users.filter(u => data[u.user_id] && data[u.user_id] !== u.role);
-      if (!changes.length) { toastSuccess('لا تغييرات'); return; }
+      const roleChanges = users.filter(u => data[u.user_id] && data[u.user_id] !== u.role);
+      const viewChanges = users.filter(u => {
+        const v = data[u.user_id + '::views'];
+        return v && v !== presetOf(u.allowed_views);
+      });
+      if (!roleChanges.length && !viewChanges.length) { toastSuccess('لا تغييرات'); return; }
       try {
-        for (const u of changes) {
+        for (const u of roleChanges) {
           await store.adapter.setUserRole(u.user_id, data[u.user_id]);
           await store.logAudit({
             action: 'role_change', entity_type: 'user', entity_id: u.user_id,
             summary_ar: `تغيير دور ${u.email}: ${ROLE_LABELS[u.role]} ← ${ROLE_LABELS[data[u.user_id]]}`
           });
         }
-        toastSuccess(`تم تحديث ${changes.length} دور`);
+        for (const u of viewChanges) {
+          const preset = VIEW_PRESETS[data[u.user_id + '::views']];
+          await store.adapter.setUserViews(u.user_id, preset.views);
+          await store.logAudit({
+            action: 'views_change', entity_type: 'user', entity_id: u.user_id,
+            summary_ar: `صفحات ${u.email}: ${preset.label}`
+          });
+        }
+        toastSuccess(`تم الحفظ (${roleChanges.length + viewChanges.length} تغيير)`);
       } catch (e) { toastError('فشل: ' + e.message); }
     }
   });
@@ -366,6 +413,16 @@ async function boot() {
     appRoot.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><div class="title">فشل تحميل البيانات</div><div class="desc">${escape(e.message)}</div></div>`;
     setConn('error', 'خطأ في التحميل');
     return;
+  }
+
+  /* v4.8: ابدأ من أول صفحة مسموحة إن كان الافتراضي محجوباً */
+  if (auth && !auth.isOwner && auth.allowedViews) {
+    const current = (location.hash.slice(1) || APP.default_view).split('?')[0];
+    const KEY = { tree:'tree', portfolios:'portfolios', portfolio:'portfolios',
+                  project:'portfolios', workbench:'workbench' };
+    if (KEY[current] && !auth.canSee(KEY[current])) {
+      location.hash = auth.firstAllowedView();
+    }
   }
 
   /* Initial route */

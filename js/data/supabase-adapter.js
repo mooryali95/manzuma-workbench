@@ -226,6 +226,12 @@ export class SupabaseAdapter extends DataAdapter {
     return true;
   }
 
+  async setUserViews(userId, views) {
+    const { error } = await this.client.rpc('wb_set_user_views', { target: userId, views });
+    if (error) throw error;
+    return true;
+  }
+
   /* ─── Realtime (v4.3) ────────────────────────────────────────── */
   /* One channel listening to all workbench display tables.
      The callback receives the raw postgres_changes payload;

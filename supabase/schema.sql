@@ -195,3 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
 -- v4.5 (migration: wb_v45_item_portfolio_override):
 -- wb_items.portfolio_override_id → wb_portfolios(id) ON DELETE SET NULL
 -- المحفظة الفعلية للعنصر = override ?? محفظة المفهوم الأم.
+
+-- v4.8 (migration: wb_v48_user_views):
+-- wb_user_roles.allowed_views jsonb (NULL = الكل) + wb_list_users موسعة
+-- + RPC wb_set_user_views(target, views) للمالك فقط.
