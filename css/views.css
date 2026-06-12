@@ -554,3 +554,113 @@
   .tn-meta{ display:none; }
   .tn-prog .bar{ width:54px; }
 }
+
+/* ─── 🌳 المخطط الهيكلي (v4.6 — Org Chart) ─────────────────────── */
+.oc-wrap{ overflow-x:auto; padding:6px 2px 20px; }
+
+.oc-root-row{ display:flex; justify-content:center; min-width:fit-content; }
+.oc-root{
+  background:#163A2C; color:#fff; border-radius:14px;
+  padding:14px 28px; text-align:center; min-width:240px;
+  box-shadow:0 6px 20px rgba(22,58,44,0.25);
+}
+.oc-root-name{ font-size:15px; font-weight:800; }
+.oc-root-meta{ font-size:11px; opacity:0.85; margin-top:4px; }
+.oc-root-meta .late{ color:#FFB4A8; }
+
+.oc-stem{ width:2px; height:22px; background:#2F6B50; margin:0 auto; min-width:2px; }
+
+.oc-cols{
+  display:flex; align-items:flex-start; gap:18px;
+  min-width:fit-content; padding:0 8px;
+}
+.oc-col{ width:270px; flex:0 0 270px; }
+
+/* خطوط التفرع: عمودي لكل عمود + أفقي يصل الأعمدة */
+.oc-link{ height:24px; position:relative; }
+.oc-link::before{
+  content:''; position:absolute; top:12px; bottom:-2px;
+  right:50%; width:2px; background:#2F6B50;
+}
+.oc-link::after{
+  content:''; position:absolute; top:12px; height:2px; background:#2F6B50;
+  right:calc(-18px); left:calc(-18px);
+}
+.oc-col:first-child .oc-link::after{ right:50%; }
+.oc-col:last-child  .oc-link::after{ left:50%; }
+.oc-col:only-child  .oc-link::after{ display:none; }
+
+.oc-pf-head{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:10px 14px; border-radius:12px; cursor:pointer;
+  background:var(--pfbg); border:1px solid color-mix(in srgb, var(--pfc) 30%, transparent);
+  border-top:3px solid var(--pfc);
+}
+.oc-pf-head:hover{ filter:brightness(0.98); }
+.oc-pf-name{ font-size:13px; font-weight:800; color:var(--pfc); }
+.oc-pf-meta{ font-size:11px; font-weight:700; color:var(--pfc); white-space:nowrap; }
+
+.oc-cards{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+.oc-empty{ font-size:11px; color:var(--ink-4, var(--ink-3)); text-align:center; padding:14px 0; }
+
+.oc-card{
+  background:#FFF; border:1px solid var(--line); border-radius:12px;
+  padding:12px 14px; cursor:pointer; transition:box-shadow .15s;
+}
+.oc-card:hover{ box-shadow:0 3px 12px rgba(0,0,0,0.07); }
+.oc-card.is-late{
+  border-inline-start:4px solid var(--danger);
+  background:#FFF8F7;
+}
+.oc-card.is-incoming{ border-style:dashed; background:#F8FAFE; }
+.oc-card.is-hit{ outline:2px solid #E5C558; }
+
+.oc-card-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.oc-card-name{
+  font-size:12.5px; font-weight:700; color:var(--ink-1); line-height:1.5;
+}
+.oc-card-name[role="link"]:hover{ text-decoration:underline; text-underline-offset:3px; }
+.oc-warn{ color:var(--danger); }
+.oc-card-pct{ font-size:17px; font-weight:800; color:var(--ink-1); }
+.oc-card-pct.late{ color:var(--danger); }
+
+.oc-bar{
+  height:6px; border-radius:99px; background:rgba(0,0,0,0.07);
+  overflow:hidden; margin:8px 0;
+}
+.oc-fill{ display:block; height:100%; border-radius:99px;
+  background:linear-gradient(90deg,#C9A227,#8A6D2F); }
+.oc-fill.late{ background:var(--danger); }
+
+.oc-card-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+.oc-chip{
+  font-size:10px; font-weight:700; padding:2px 9px; border-radius:999px;
+  background:rgba(0,0,0,0.05); color:var(--ink-2);
+}
+.oc-chip.danger{ background:var(--danger-bg); color:var(--danger); }
+.oc-chip.good{ background:var(--good-bg); color:var(--good); }
+
+.oc-dots{ display:flex; gap:5px; margin-top:9px; align-items:center; }
+.oc-dot{ width:9px; height:9px; border-radius:99px; background:var(--idle-bg);
+  border:1.5px solid var(--idle); }
+.oc-dot.s-in_progress{ background:var(--warn-bg); border-color:var(--warn); }
+.oc-dot.s-completed{ background:var(--good); border-color:var(--good); }
+.oc-dot.s-blocked{ background:var(--danger); border-color:var(--danger); }
+.oc-dot-more{ font-size:9px; color:var(--ink-3); font-weight:700; }
+
+.oc-items{ margin-top:10px; border-top:1px dashed var(--line); padding-top:8px;
+  display:flex; flex-direction:column; gap:4px; }
+.oc-item{
+  display:flex; align-items:center; gap:7px;
+  padding:5px 8px; border-radius:8px; font-size:11px;
+}
+.oc-item:hover{ background:rgba(0,0,0,0.04); }
+.oc-item.is-hit{ background:#FBF6E3; }
+.oc-item-icon{ flex:0 0 auto; font-size:11px; }
+.oc-item-name{ font-weight:600; color:var(--ink-1); flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.oc-item-meta{ font-size:10px; color:var(--ink-3); white-space:nowrap; }
+
+@media (max-width:720px){
+  .oc-col{ width:230px; flex-basis:230px; }
+}

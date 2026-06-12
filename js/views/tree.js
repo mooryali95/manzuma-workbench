@@ -1,352 +1,273 @@
 /**
- * views/tree.js  (v4.5)
- * 🌳 الشجرة — الصورة الكلية من أول نظرة.
+ * views/tree.js  (v4.6 — Org Chart)
+ * 🌳 الشجرة — مخطط هيكلي تنظيمي على نمط لوحة منظومة:
+ * عقدة جذر ← أعمدة المحافظ (بألوانها) ← بطاقات المفاهيم
+ * ← عناصر قابلة للفتح داخل البطاقة ← التنقل بالنقر.
  *
- * هرمية: محفظة ← مفهوم ← عنصر (منتج/مبادرة/مشروع) ← مراحل
- * مع تجميع تصاعدي (Roll-up) على كل عقدة، وبحث فوري،
- * ودعم «المحفظة الفعلية»: العنصر المتجاوز يظهر مرة واحدة
- * في محفظته الفعلية بوسم «↩ تابع لمفهوم X»، ويُترك في
- * مفهومه الأم سطر شبحي «⤴ في محفظة Y» (لا يُحتسب).
+ * يدعم «المحفظة الفعلية» (v4.5): العنصر المتجاوز يُحتسب ويظهر
+ * في محفظته الفعلية ضمن بطاقة «↩ عناصر واردة».
  */
 
 import { escapeText } from '../utils.js';
 import { projectProgress, projectStatus, statusLabelAr } from '../models.js';
-import { linkBadgeHtml } from '../components/clickup-link.js';
+import { APP } from '../../config.js';
 
 const KIND_LABEL = { product:'منتج', initiative:'مبادرة', project:'مشروع' };
+const KIND_ICON  = { product:'📦', initiative:'🚀', project:'🏗' };
 const today = () => new Date().toISOString().slice(0, 10);
 
-/* حالة العرض (تبقى خلال الجلسة) */
-const treeState = { open: new Set(), search: '', booted: false };
+/* حالة العرض خلال الجلسة */
+const ocState = { openCards: new Set(), search: '' };
 
 export function renderTree(root, store, router) {
   root.innerHTML = '';
-
-  /* أول فتح: افتح كل المحافظ فقط */
-  if (!treeState.booted) {
-    (store.state.portfolios || []).forEach(p => treeState.open.add('pf:' + p.id));
-    treeState.booted = true;
-  }
-
   const model = buildModel(store);
 
-  /* ─── شريط الملخص ─── */
-  const summary = document.createElement('div');
-  summary.className = 'tree-summary';
-  summary.innerHTML = `
-    <div class="ts-cell"><div class="v tnum">${model.totals.portfolios}</div><div class="l">محفظة</div></div>
-    <div class="ts-cell"><div class="v tnum">${model.totals.concepts}</div><div class="l">مفهوم</div></div>
-    <div class="ts-cell"><div class="v tnum">${model.totals.items}</div><div class="l">عنصر</div></div>
-    <div class="ts-cell"><div class="v tnum">${model.totals.phases}</div><div class="l">مرحلة</div></div>
-    <div class="ts-cell ${model.totals.overdue ? 'is-late' : ''}"><div class="v tnum">${model.totals.overdue}</div><div class="l">متأخرة</div></div>
-    <div class="ts-cell"><div class="v tnum">${model.totals.avgProgress}%</div><div class="l">متوسط التقدم</div></div>
-  `;
-  root.appendChild(summary);
-
-  /* ─── أدوات الشجرة ─── */
+  /* ─── أدوات ─── */
   const tools = document.createElement('div');
   tools.className = 'tree-tools';
   tools.innerHTML = `
-    <input type="search" id="tree-search" placeholder="🔎 بحث في الشجرة…" value="${escapeText(treeState.search)}">
-    <button class="btn sm" id="tree-expand">⊞ توسيع الكل</button>
-    <button class="btn sm" id="tree-collapse">⊟ طي الكل</button>
+    <input type="search" id="oc-search" placeholder="🔎 بحث…" value="${escapeText(ocState.search)}">
+    <button class="btn sm" id="oc-expand">⊞ فتح كل البطاقات</button>
+    <button class="btn sm" id="oc-collapse">⊟ إغلاقها</button>
   `;
   root.appendChild(tools);
 
-  const treeRoot = document.createElement('div');
-  treeRoot.className = 'tree-root';
-  root.appendChild(treeRoot);
+  const wrap = document.createElement('div');
+  wrap.className = 'oc-wrap';
+  root.appendChild(wrap);
 
-  const draw = () => drawTree(treeRoot, model, store, router);
-  treeRoot.addEventListener('tree:redraw', draw);
+  const draw = () => drawChart(wrap, model, store, router);
   draw();
 
-  tools.querySelector('#tree-search').addEventListener('input', (e) => {
-    treeState.search = e.target.value.trim();
+  tools.querySelector('#oc-search').addEventListener('input', (e) => {
+    ocState.search = e.target.value.trim();
     draw();
   });
-  tools.querySelector('#tree-expand').addEventListener('click', () => {
-    collectAllKeys(model).forEach(k => treeState.open.add(k));
+  tools.querySelector('#oc-expand').addEventListener('click', () => {
+    model.portfolios.forEach(p => {
+      p.cards.forEach(c => ocState.openCards.add(c.key));
+    });
     draw();
   });
-  tools.querySelector('#tree-collapse').addEventListener('click', () => {
-    treeState.open.clear();
+  tools.querySelector('#oc-collapse').addEventListener('click', () => {
+    ocState.openCards.clear();
     draw();
   });
 }
 
-/* ─── بناء النموذج مع التجميعات ─────────────────────────────────── */
+/* ─── النموذج ─────────────────────────────────────────────────────── */
 function buildModel(store) {
   const t = today();
+
+  const itemNode = (raw) => {
+    const phases = store.phasesOfProject(raw.id);
+    const overdue = phases.filter(p =>
+      p.status !== 'completed' && p.end_date && p.end_date < t).length;
+    return {
+      item: raw,
+      phases,
+      overdue,
+      progress: phases.length ? projectProgress(store, raw.id) : null,
+      status: phases.length ? projectStatus(store, raw.id) : 'not_started'
+    };
+  };
+
+  /* تجميعة لمجموعة عناصر */
+  const aggregate = (nodes) => {
+    const withProg = nodes.filter(n => n.progress !== null);
+    return {
+      total: nodes.length,
+      done: nodes.filter(n => n.status === 'completed').length,
+      overdue: nodes.reduce((s, n) => s + n.overdue, 0),
+      phases: nodes.reduce((s, n) => s + n.phases.length, 0),
+      avg: withProg.length
+        ? Math.round(withProg.reduce((s, n) => s + n.progress, 0) / withProg.length)
+        : (nodes.length && nodes.every(n => n.status === 'completed') ? 100 : 0)
+    };
+  };
+
   const portfolios = [...(store.state.portfolios || [])]
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-  const itemNode = (item) => {
-    const phases = store.phasesOfProject(item.id);
-    const overdue = phases.filter(p =>
-      p.status !== 'completed' && p.end_date && p.end_date < t).length;
-    const progress = phases.length ? projectProgress(store, item.id) : null;
-    const status = phases.length ? projectStatus(store, item.id) : 'not_started';
-    return { item, phases, overdue, progress, status };
-  };
-
-  const model = {
-    portfolios: [],
-    totals: { portfolios: portfolios.length, concepts: 0, items: 0, phases: 0, overdue: 0, avgProgress: 0 }
-  };
-  const progressPool = [];
+  const model = { portfolios: [], rootAgg: null };
+  const allEff = [];
 
   for (const pf of portfolios) {
-    const concepts = store.conceptsInPortfolio(pf.id).map(concept => {
-      const own = store.childrenOf(concept.id);              /* عناصر المفهوم */
-      const staying = [], moved = [];
-      for (const raw of own) {
-        const node = itemNode(raw);
-        const effPf = store.effectivePortfolioId(raw);
-        if (effPf && String(effPf) !== String(pf.id)) moved.push({ ...node, toPf: effPf });
-        else staying.push(node);
+    const cards = [];
+
+    for (const concept of store.conceptsInPortfolio(pf.id)) {
+      const staying = [];
+      for (const raw of store.childrenOf(concept.id)) {
+        const eff = store.effectivePortfolioId(raw);
+        if (eff && String(eff) !== String(pf.id)) continue;  /* يُحتسب في محفظته الفعلية */
+        staying.push(itemNode(raw));
       }
-      return { concept, staying, moved };
-    });
+      cards.push({
+        key: 'c:' + concept.id,
+        kind: 'concept',
+        concept,
+        nodes: staying,
+        agg: aggregate(staying)
+      });
+    }
 
-    /* العناصر الواردة عبر التجاوز من مفاهيم محافظ أخرى */
-    const incoming = store.incomingItemsOfPortfolio(pf.id).map(raw => {
-      const node = itemNode(raw);
-      const homeConcept = store.conceptById(raw.parent_id);
-      return { ...node, homeConcept };
-    });
+    /* بطاقة العناصر الواردة عبر التجاوز */
+    const incoming = store.incomingItemsOfPortfolio(pf.id).map(raw => ({
+      ...itemNode(raw),
+      homeConcept: store.conceptById(raw.parent_id)
+    }));
+    if (incoming.length) {
+      cards.push({
+        key: 'in:' + pf.id,
+        kind: 'incoming',
+        nodes: incoming,
+        agg: aggregate(incoming)
+      });
+    }
 
-    /* تجميعات المحفظة: العناصر الفعلية = staying + incoming */
-    const effItems = [
-      ...concepts.flatMap(c => c.staying),
-      ...incoming
-    ];
-    const agg = {
-      concepts: concepts.length,
-      items: effItems.length,
-      phases: effItems.reduce((s, n) => s + n.phases.length, 0),
-      overdue: effItems.reduce((s, n) => s + n.overdue, 0),
-      status: { in_progress: 0, blocked: 0, completed: 0, not_started: 0 },
-      avgProgress: 0
-    };
-    const withProg = effItems.filter(n => n.progress !== null);
-    agg.avgProgress = withProg.length
-      ? Math.round(withProg.reduce((s, n) => s + n.progress, 0) / withProg.length) : 0;
-    effItems.forEach(n => { agg.status[n.status] = (agg.status[n.status] || 0) + 1; });
-
-    model.portfolios.push({ pf, concepts, incoming, agg });
-    model.totals.concepts += agg.concepts;
-    model.totals.items += agg.items;
-    model.totals.phases += agg.phases;
-    model.totals.overdue += agg.overdue;
-    withProg.forEach(n => progressPool.push(n.progress));
+    const pfNodes = cards.flatMap(c => c.nodes);
+    allEff.push(...pfNodes);
+    model.portfolios.push({ pf, cards, agg: aggregate(pfNodes) });
   }
 
-  model.totals.avgProgress = progressPool.length
-    ? Math.round(progressPool.reduce((s, v) => s + v, 0) / progressPool.length) : 0;
+  model.rootAgg = aggregate(allEff);
   return model;
 }
 
-function collectAllKeys(model) {
-  const keys = [];
-  for (const p of model.portfolios) {
-    keys.push('pf:' + p.pf.id);
-    p.concepts.forEach(c => keys.push('c:' + c.concept.id));
-    [...p.concepts.flatMap(c => c.staying), ...p.incoming]
-      .forEach(n => keys.push('i:' + n.item.id));
-  }
-  return keys;
-}
-
 /* ─── الرسم ──────────────────────────────────────────────────────── */
-function drawTree(treeRoot, model, store, router) {
-  const q = treeState.search.toLowerCase();
-  const match = (txt) => q && (txt || '').toLowerCase().includes(q);
+function drawChart(wrap, model, store, router) {
+  const q = ocState.search.toLowerCase();
+  const hit = (txt) => q && (txt || '').toLowerCase().includes(q);
 
-  treeRoot.innerHTML = '';
-  let anyVisible = false;
+  const cardMatches = (card) =>
+    !q ||
+    (card.kind === 'concept' && hit(card.concept.name)) ||
+    card.nodes.some(n => hit(n.item.name));
 
-  for (const { pf, concepts, incoming, agg } of model.portfolios) {
-    /* عند البحث: تظهر المحفظة إن طابقت هي أو أي شيء تحتها */
-    const subMatches = !q ? null : {
-      concepts: concepts.filter(c =>
-        match(c.concept.name) ||
-        c.staying.some(n => match(n.item.name) || n.phases.some(ph => match(ph.name_ar))) ||
-        c.moved.some(n => match(n.item.name))),
-      incoming: incoming.filter(n => match(n.item.name) || n.phases.some(ph => match(ph.name_ar)))
-    };
-    const pfMatch = !q || match(pf.name_ar) || subMatches.concepts.length || subMatches.incoming.length;
-    if (!pfMatch) continue;
-    anyVisible = true;
+  const visPortfolios = model.portfolios
+    .map(p => ({ ...p, visCards: p.cards.filter(cardMatches) }))
+    .filter(p => !q || hit(p.pf.name_ar) || p.visCards.length);
 
-    const pfKey = 'pf:' + pf.id;
-    const pfOpen = q ? true : treeState.open.has(pfKey);
-    const statusDots = `
-      ${agg.status.in_progress ? `<span class="tdot warn" title="جارية">${agg.status.in_progress}</span>` : ''}
-      ${agg.status.blocked ? `<span class="tdot danger" title="متعثرة">${agg.status.blocked}</span>` : ''}
-      ${agg.status.completed ? `<span class="tdot good" title="مكتملة">${agg.status.completed}</span>` : ''}
-      ${agg.status.not_started ? `<span class="tdot idle" title="لم تبدأ">${agg.status.not_started}</span>` : ''}
-    `;
-
-    const pfEl = node({
-      key: pfKey, level: 0, open: pfOpen, hasChildren: concepts.length + incoming.length > 0,
-      icon: '🗂', cls: 'tn-pf',
-      title: pf.name_ar, highlight: match(pf.name_ar),
-      meta: `${agg.concepts} مفهوم · ${agg.items} عنصر · ${agg.phases} مرحلة` +
-            (agg.overdue ? ` · <b class="late">${agg.overdue} متأخرة</b>` : ''),
-      right: `${statusDots}${progressBar(agg.avgProgress)}`,
-      onTitle: () => router.navigate('portfolio', { pf: pf.id })
-    });
-    treeRoot.appendChild(pfEl.row);
-
-    if (!pfOpen) continue;
-
-    const visConcepts = q ? subMatches.concepts : concepts;
-    for (const cNode of visConcepts) {
-      const { concept, staying, moved } = cNode;
-      const cKey = 'c:' + concept.id;
-      const cOpen = q ? true : treeState.open.has(cKey);
-      const cAggPhases = staying.reduce((s, n) => s + n.phases.length, 0);
-      const cOverdue = staying.reduce((s, n) => s + n.overdue, 0);
-      const kindCounts = ['product', 'initiative', 'project']
-        .map(k => [k, staying.filter(n => n.item._kind === k).length])
-        .filter(([, n]) => n)
-        .map(([k, n]) => `${n} ${KIND_LABEL[k]}`).join(' · ');
-
-      const cEl = node({
-        key: cKey, level: 1, open: cOpen, hasChildren: staying.length + moved.length > 0,
-        icon: '💡', cls: 'tn-concept',
-        title: concept.name, highlight: match(concept.name),
-        badges: linkBadgeHtml(store, concept),
-        meta: (kindCounts || 'بلا عناصر') +
-              (cAggPhases ? ` · ${cAggPhases} مرحلة` : '') +
-              (cOverdue ? ` · <b class="late">${cOverdue} متأخرة</b>` : ''),
-        onTitle: () => router.navigate('portfolio', { pf: pf.id, focus: concept.id })
-      });
-      treeRoot.appendChild(cEl.row);
-      if (!cOpen) continue;
-
-      for (const n of staying) {
-        const filtered = q && !match(n.item.name) &&
-          !n.phases.some(ph => match(ph.name_ar)) && !match(concept.name) && !match(pf.name_ar);
-        if (filtered) continue;
-        appendItemBranch(treeRoot, n, 2, store, router, { q, match });
-      }
-      /* أسطر شبحية للعناصر المنقولة */
-      for (const n of moved) {
-        const toPf = store.portfolioById(n.toPf);
-        const ghost = node({
-          key: null, level: 2, open: false, hasChildren: false,
-          icon: '⤴', cls: 'tn-ghost',
-          title: n.item.name, highlight: match(n.item.name),
-          meta: `في محفظة «${escapeText(toPf?.name_ar || '?')}» — يُحتسب هناك`,
-          onTitle: n.item._kind === 'project'
-            ? () => router.navigate('project', { id: n.item.id })
-            : () => router.navigate('portfolio', { pf: n.toPf, focus: n.item.parent_id })
-        });
-        treeRoot.appendChild(ghost.row);
-      }
-    }
-
-    /* العناصر الواردة */
-    const visIncoming = q ? subMatches.incoming : incoming;
-    if (visIncoming.length) {
-      const head = node({
-        key: null, level: 1, open: true, hasChildren: false,
-        icon: '↩', cls: 'tn-incoming-head',
-        title: `عناصر واردة (${visIncoming.length})`,
-        meta: 'عناصر محفظتها الفعلية هنا ومفهومها الأم في محفظة أخرى'
-      });
-      treeRoot.appendChild(head.row);
-      for (const n of visIncoming) {
-        appendItemBranch(treeRoot, n, 2, store, router, {
-          q, match,
-          extraTag: `<span class="tn-tag">↩ تابع لمفهوم «${escapeText(n.homeConcept?.name || '?')}»</span>`
-        });
-      }
-    }
-  }
-
-  if (!anyVisible) {
-    treeRoot.innerHTML = `<div class="empty-state"><div class="icon">🔎</div>
-      <div class="title">لا نتائج</div><div class="desc">جرّب كلمة أخرى</div></div>`;
-  }
-}
-
-/* فرع عنصر + مراحله */
-function appendItemBranch(treeRoot, n, level, store, router, { q, match, extraTag = '' }) {
-  const iKey = 'i:' + n.item.id;
-  const iOpen = q ? n.phases.some(ph => match(ph.name_ar)) || treeState.open.has(iKey)
-                  : treeState.open.has(iKey);
-  const kindIcon = { product: '📦', initiative: '🚀', project: '🏗' }[n.item._kind] || '▫️';
-
-  const iEl = node({
-    key: iKey, level, open: iOpen, hasChildren: n.phases.length > 0,
-    icon: kindIcon, cls: 'tn-item',
-    title: n.item.name, highlight: match && match(n.item.name),
-    badges: `<span class="kind-badge" data-kind="${n.item._kind}">${KIND_LABEL[n.item._kind]}</span>
-             <span class="status-pill" data-s="${n.status}">${statusLabelAr(n.status)}</span>
-             ${linkBadgeHtml(store, n.item)} ${extraTag}`,
-    meta: n.phases.length
-      ? `${n.phases.length} مرحلة` + (n.overdue ? ` · <b class="late">${n.overdue} متأخرة</b>` : '')
-      : 'بلا مراحل',
-    right: n.progress !== null ? progressBar(n.progress) : '',
-    onTitle: n.item._kind === 'project'
-      ? () => router.navigate('project', { id: n.item.id })
-      : () => router.navigate('portfolio', { pf: store.effectivePortfolioId(n.item), focus: n.item.parent_id })
-  });
-  treeRoot.appendChild(iEl.row);
-  if (!iOpen) return;
-
-  const t = today();
-  for (const ph of n.phases) {
-    if (q && !match(ph.name_ar) && !match(n.item.name)) continue;
-    const late = ph.status !== 'completed' && ph.end_date && ph.end_date < t;
-    const phEl = node({
-      key: null, level: level + 1, open: false, hasChildren: false,
-      icon: late ? '⏰' : '◽', cls: 'tn-phase' + (late ? ' is-late' : ''),
-      title: ph.name_ar, highlight: match && match(ph.name_ar),
-      badges: `<span class="status-pill" data-s="${ph.status}">${statusLabelAr(ph.status)}</span>`,
-      meta: `${ph.start_date || '?'} ← ${ph.end_date || '?'}` +
-            (ph.depends_on_phase_id ? ' · ⛓' : ''),
-      right: progressBar(ph.progress || 0, true)
-    });
-    treeRoot.appendChild(phEl.row);
-  }
-}
-
-/* ─── لبنة العقدة ─────────────────────────────────────────────────── */
-function node({ key, level, open, hasChildren, icon, cls, title, highlight, badges = '', meta = '', right = '', onTitle }) {
-  const row = document.createElement('div');
-  row.className = `tree-node ${cls}` + (highlight ? ' is-hit' : '');
-  row.style.setProperty('--lvl', level);
-  row.innerHTML = `
-    <button class="tn-toggle" ${hasChildren ? '' : 'disabled'}>${hasChildren ? (open ? '▾' : '◂') : '·'}</button>
-    <span class="tn-icon">${icon}</span>
-    <span class="tn-title" role="link" tabindex="0">${escapeText(title)}</span>
-    <span class="tn-badges">${badges}</span>
-    <span class="tn-meta">${meta}</span>
-    <span class="tn-right">${right}</span>
+  const R = model.rootAgg;
+  wrap.innerHTML = `
+    <div class="oc-root-row">
+      <div class="oc-root">
+        <div class="oc-root-name">🏛 ${escapeText(APP.name_ar)}</div>
+        <div class="oc-root-meta">
+          ${R.avg}% إنجاز · ${R.total} عنصر · ${R.phases} مرحلة
+          ${R.overdue ? ` · <b class="late">${R.overdue} متأخرة</b>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="oc-stem"></div>
+    <div class="oc-cols">
+      ${visPortfolios.map(p => columnHtml(p, store, q, hit)).join('')}
+    </div>
+    ${visPortfolios.length ? '' : `<div class="empty-state"><div class="icon">🔎</div><div class="title">لا نتائج</div></div>`}
   `;
-  if (key && hasChildren) {
-    row.querySelector('.tn-toggle').addEventListener('click', (e) => {
-      e.stopPropagation();
-      treeState.open.has(key) ? treeState.open.delete(key) : treeState.open.add(key);
-      /* أعد رسم الشجرة بالكامل عبر حدث مخصص */
-      row.dispatchEvent(new CustomEvent('tree:redraw', { bubbles: true }));
+
+  /* تفاعلات */
+  wrap.querySelectorAll('[data-oc-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const k = el.dataset.ocToggle;
+      ocState.openCards.has(k) ? ocState.openCards.delete(k) : ocState.openCards.add(k);
+      drawChart(wrap, model, store, router);
     });
-  }
-  if (onTitle) {
-    const el = row.querySelector('.tn-title');
-    el.addEventListener('click', onTitle);
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') onTitle(); });
-  }
-  return { row };
+  });
+  wrap.querySelectorAll('[data-nav-pf]').forEach(el =>
+    el.addEventListener('click', () => router.navigate('portfolio', { pf: el.dataset.navPf })));
+  wrap.querySelectorAll('[data-nav-concept]').forEach(el =>
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      router.navigate('portfolio', { pf: el.dataset.navPf, focus: el.dataset.navConcept });
+    }));
+  wrap.querySelectorAll('[data-nav-item]').forEach(el =>
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const { navItem, navKind, navPf, navConcept } = el.dataset;
+      if (navKind === 'project') router.navigate('project', { id: navItem });
+      else router.navigate('portfolio', { pf: navPf, focus: navConcept });
+    }));
 }
 
-function progressBar(pct, mini = false) {
-  return `<span class="tn-prog ${mini ? 'mini' : ''}" title="${pct}%">
-    <span class="bar"><span class="fill" style="width:${pct}%"></span></span>
-    <span class="num tnum">${pct}%</span>
-  </span>`;
+function columnHtml(p, store, q, hit) {
+  const { pf, visCards, agg } = p;
+  const color = pf.color || '#8A6D2F';
+  const bg = pf.bg_color || '#F6F1E4';
+  return `
+  <div class="oc-col">
+    <div class="oc-link"></div>
+    <div class="oc-pf-head" style="--pfc:${escapeText(color)};--pfbg:${escapeText(bg)}"
+         data-nav-pf="${escapeText(pf.id)}" role="link" tabindex="0">
+      <span class="oc-pf-name">${escapeText(pf.name_ar)}</span>
+      <span class="oc-pf-meta tnum">${agg.avg}%${agg.overdue ? ` | <b>${agg.overdue} متأخرة</b>` : ''}</span>
+    </div>
+    <div class="oc-cards">
+      ${visCards.map(c => cardHtml(c, pf, store, q, hit)).join('') ||
+        '<div class="oc-empty">لا مفاهيم</div>'}
+    </div>
+  </div>`;
+}
+
+function cardHtml(card, pf, store, q, hit) {
+  const open = q ? card.nodes.some(n => hit(n.item.name)) || ocState.openCards.has(card.key)
+                 : ocState.openCards.has(card.key);
+  const a = card.agg;
+  const late = a.overdue > 0;
+  const isIncoming = card.kind === 'incoming';
+  const title = isIncoming ? `↩ عناصر واردة (${a.total})` : card.concept.name;
+  const highlight = !isIncoming && hit(title);
+
+  /* نقاط الحالة: نقطة لكل عنصر */
+  const dots = card.nodes.slice(0, 8).map(n =>
+    `<span class="oc-dot s-${n.status}" title="${escapeText(n.item.name)} — ${statusLabelAr(n.status)}"></span>`
+  ).join('') + (card.nodes.length > 8 ? `<span class="oc-dot-more">+${card.nodes.length - 8}</span>` : '');
+
+  const itemsList = !open ? '' : `
+    <div class="oc-items">
+      ${card.nodes.map(n => itemRowHtml(n, card, pf, store, hit)).join('') ||
+        '<div class="oc-empty">بلا عناصر</div>'}
+    </div>`;
+
+  return `
+  <div class="oc-card ${late ? 'is-late' : ''} ${isIncoming ? 'is-incoming' : ''} ${highlight ? 'is-hit' : ''}"
+       data-oc-toggle="${escapeText(card.key)}">
+    <div class="oc-card-head">
+      <span class="oc-card-name" ${isIncoming ? '' :
+        `data-nav-concept="${escapeText(card.concept.id)}" data-nav-pf="${escapeText(pf.id)}" role="link" tabindex="0"`}>
+        ${late ? '<span class="oc-warn">⚠</span> ' : ''}${escapeText(title)}
+        ${!isIncoming && card.concept.linked_bot_entity_id ? ' <span class="cu-badge">🔗</span>' : ''}
+      </span>
+      <span class="oc-card-pct tnum ${late ? 'late' : ''}">${a.avg}%</span>
+    </div>
+    <div class="oc-bar"><span class="oc-fill ${late ? 'late' : ''}" style="width:${a.avg}%"></span></div>
+    <div class="oc-card-chips">
+      <span class="oc-chip tnum">${a.done}/${a.total}</span>
+      ${a.overdue ? `<span class="oc-chip danger">⚠ ${a.overdue} متأخرة</span>` : ''}
+      ${a.total && a.done === a.total ? '<span class="oc-chip good">✓ مكتمل</span>' : ''}
+    </div>
+    <div class="oc-dots">${dots}</div>
+    ${itemsList}
+  </div>`;
+}
+
+function itemRowHtml(n, card, pf, store, hit) {
+  const effPf = store.effectivePortfolioId(n.item);
+  return `
+  <div class="oc-item ${hit(n.item.name) ? 'is-hit' : ''}"
+       data-nav-item="${escapeText(n.item.id)}"
+       data-nav-kind="${escapeText(n.item._kind)}"
+       data-nav-pf="${escapeText(effPf || pf.id)}"
+       data-nav-concept="${escapeText(n.item.parent_id)}"
+       role="link" tabindex="0">
+    <span class="oc-item-icon">${KIND_ICON[n.item._kind] || '▫️'}</span>
+    <span class="oc-item-name">${escapeText(n.item.name)}</span>
+    ${card.kind === 'incoming' && n.homeConcept
+      ? `<span class="tn-tag">↩ ${escapeText(n.homeConcept.name)}</span>` : ''}
+    <span class="oc-item-meta tnum">
+      ${n.progress !== null ? n.progress + '%' : '—'}
+      ${n.overdue ? ` · <b class="late">⚠${n.overdue}</b>` : ''}
+    </span>
+  </div>`;
 }
