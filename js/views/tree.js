@@ -296,13 +296,17 @@ function drawConnectors(wrap) {
   const r = center(rootEl);
   const rootBottom = { x: r.x, y: r.y + r.h };
   const pts = heads.map(h => { const c = center(h); return { x: c.x, y: c.y }; });
-  const busY = rootBottom.y + Math.max(14, (Math.min(...pts.map(p => p.y)) - rootBottom.y) / 2);
+  const topY = Math.min(...pts.map(p => p.y));
+  const busY = rootBottom.y + Math.max(16, (topY - rootBottom.y) / 2);
 
+  /* الناقل يمتد ليشمل موضع الجذر دائماً — اتصال مضمون */
   const xs = pts.map(p => p.x);
+  const busMin = Math.min(...xs, rootBottom.x);
+  const busMax = Math.max(...xs, rootBottom.x);
   const seg = (d) => `<path d="${d}"/>`;
   let paths = seg(`M ${rootBottom.x} ${rootBottom.y} V ${busY}`);
-  if (pts.length > 1) paths += seg(`M ${Math.min(...xs)} ${busY} H ${Math.max(...xs)}`);
-  for (const p of pts) paths += seg(`M ${p.x} ${busY} V ${p.y}`);
+  if (pts.length > 1 || busMin !== busMax) paths += seg(`M ${busMin} ${busY} H ${busMax}`);
+  for (const p of pts) paths += seg(`M ${p.x} ${busY} V ${p.y + 1}`);
 
   svg.innerHTML = `<g class="oc-lines">${paths}</g>`;
 }

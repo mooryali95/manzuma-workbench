@@ -315,7 +315,7 @@ function renderPool(store, router, viewRoot) {
 
     <div class="pool-section" data-pool="individuals">
       <div class="pool-section-head">
-        <span class="pool-section-title">الأفراد <span class="count">${(store.state.individuals||[]).length}</span></span>
+        <span class="pool-section-title" data-sec-toggle="individuals"><span class="sec-chev">▾</span> الأفراد <span class="count">${(store.state.individuals||[]).length}</span></span>
         <button class="btn-add" data-act="add-individual">+ إضافة</button>
       </div>
       <div class="pool-items"></div>
@@ -323,7 +323,7 @@ function renderPool(store, router, viewRoot) {
 
     <div class="pool-section" data-pool="entities">
       <div class="pool-section-head">
-        <span class="pool-section-title">الكيانات <span class="count">${(store.state.entities||[]).length}</span></span>
+        <span class="pool-section-title" data-sec-toggle="entities"><span class="sec-chev">▾</span> الكيانات <span class="count">${(store.state.entities||[]).length}</span></span>
         <button class="btn-add" data-act="add-entity">+ إضافة</button>
       </div>
       <div class="pool-items"></div>
@@ -331,18 +331,74 @@ function renderPool(store, router, viewRoot) {
 
     <div class="pool-section" data-pool="products">
       <div class="pool-section-head">
-        <span class="pool-section-title">المنتجات/المبادرات بلا تشكيل <span class="count" id="orphans-count">0</span></span>
+        <span class="pool-section-title" data-sec-toggle="products"><span class="sec-chev">▾</span> المنتجات/المبادرات بلا تشكيل <span class="count" id="orphans-count">0</span></span>
+        <button class="btn-add" data-act="add-item">+ إضافة</button>
       </div>
       <div class="pool-items"></div>
     </div>
 
     <div class="pool-section" data-pool="projects">
       <div class="pool-section-head">
-        <span class="pool-section-title">المشاريع بلا تشكيل <span class="count" id="proj-orphans-count">0</span></span>
+        <span class="pool-section-title" data-sec-toggle="projects"><span class="sec-chev">▾</span> المشاريع بلا تشكيل <span class="count" id="proj-orphans-count">0</span></span>
+        <button class="btn-add" data-act="add-project">+ إضافة</button>
       </div>
       <div class="pool-items"></div>
     </div>
   `;
+
+  /* v4.8.1: طي/توسيع كل قسم على حدة (محفوظ) */
+  pool.querySelectorAll('[data-sec-toggle]').forEach(t => {
+    const key = t.dataset.secToggle;
+    const section = t.closest('.pool-section');
+    const apply = (collapsed) => {
+      section.classList.toggle('sec-collapsed', collapsed);
+      t.querySelector('.sec-chev').textContent = collapsed ? '◂' : '▾';
+    };
+    apply(localStorage.getItem('wb_sec_' + key) === '1');
+    t.addEventListener('click', () => {
+      const collapsed = !section.classList.contains('sec-collapsed');
+      apply(collapsed);
+      localStorage.setItem('wb_sec_' + key, collapsed ? '1' : '0');
+    });
+  });
+
+  /* v4.8.1: إضافة منتج/مبادرة أو مشروع من العمود مباشرة */
+  const addItemFromPool = (fixedKind) => {
+    const concepts = (store.state.concepts || []).filter(c => c.is_active !== false);
+    if (!concepts.length) { toastError('أنشئ مفهوماً أولاً من صفحة المحافظ'); return; }
+    const kindField = fixedKind
+      ? []
+      : [{ name:'kind', label:'النوع', type:'select', value:'مبادرة',
+           options:[{value:'مبادرة',label:'مبادرة'},{value:'منتج',label:'منتج'}] }];
+    openForm({
+      title: fixedKind ? 'إضافة مشروع' : 'إضافة منتج/مبادرة',
+      fields: [
+        { name:'name', label:'الاسم', required:true },
+        ...kindField,
+        { name:'concept_id', label:'المفهوم الأم', type:'select', required:true,
+          value:String(concepts[0].id),
+          options: concepts.map(c => ({ value:String(c.id), label:c.name })) },
+        { name:'owner', label:'المالك (اختياري)' }
+      ],
+      confirm: async (data) => {
+        if (!data.name || !data.concept_id) return false;
+        const kind = fixedKind || data.kind;
+        const tbl = kind === 'مشروع' ? 'projects' : kind === 'منتج' ? 'products' : 'initiatives';
+        try {
+          const row = await store.actCreate(tbl, {
+            id: uid('itm'), name: data.name, parent_id: data.concept_id,
+            entity_type: kind, owner: data.owner || null, is_active: true
+          });
+          await store.logAudit({ action:'item_create', entity_type: tbl.replace(/s$/,''),
+            entity_id:String(row.id), summary_ar:`إضافة ${kind}: «${data.name}» (من الورشة)` });
+          toastSuccess(`تمت الإضافة: ${data.name}`);
+          renderWorkbench(viewRoot, store, router, {});
+        } catch (e) { toastError('فشل: ' + e.message); }
+      }
+    });
+  };
+  pool.querySelector('[data-act="add-item"]').addEventListener('click', () => addItemFromPool(null));
+  pool.querySelector('[data-act="add-project"]').addEventListener('click', () => addItemFromPool('مشروع'));
 
   /* زر الطي/التوسيع */
   pool.querySelector('.pool-toggle').addEventListener('click', () => {

@@ -696,3 +696,25 @@
 .oc-stack .oc-root{ margin:0 auto; }
 .oc-acc .oc-pf-head{ user-select:none; }
 .oc-acc .oc-cards{ margin-top:8px; padding-inline-start:6px; }
+
+
+/* ─── v4.8.1: توازن المخطط + طي أقسام العمود ───────────────────── */
+/* كتلة المخطط تتوسط الصفحة، والجذر يتوسط الأعمدة نفسها */
+.oc-wide .oc-content{ width:fit-content; margin-inline:auto; }
+.oc-wide .oc-root-row{ display:flex; justify-content:center; }
+.oc-wide .oc-cols{ justify-content:center; }
+.oc-col{ width:256px; flex:0 0 256px; }
+.oc-cols{ gap:22px; }
+
+/* عمود بلا مفاهيم: مدمج وأنيق بدل الفراغ */
+.oc-empty{
+  font-size:10.5px; color:var(--ink-4, var(--ink-3));
+  background:rgba(0,0,0,0.025); border:1px dashed var(--line);
+  border-radius:10px; padding:10px; margin-top:8px;
+}
+
+/* طي أقسام العمود الجانبي */
+.pool-section-title[data-sec-toggle]{ cursor:pointer; user-select:none; }
+.pool-section-title[data-sec-toggle]:hover{ color:var(--ink-1); }
+.sec-chev{ display:inline-block; width:12px; font-size:9px; color:var(--ink-3); }
+.pool-section.sec-collapsed .pool-items{ display:none; }
