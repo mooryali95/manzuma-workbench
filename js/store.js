@@ -21,6 +21,18 @@ export class Store {
     this.subscribers = new Set();
     this.lastLocalWriteAt = 0;   /* realtime self-echo suppression */
     this._rtTimer = null;
+    this.auth = null;            /* v4.4: AuthManager (null = local mode) */
+  }
+
+  /* v4.4: يُستدعى مرة بعد المصادقة الناجحة */
+  attachAuth(auth) { this.auth = auth; }
+
+  get canWrite() { return this.auth ? this.auth.canWrite : true; }
+
+  assertWrite() {
+    if (!this.canWrite) {
+      throw new Error('صلاحيتك للقراءة فقط — اطلب ترقية الدور من مالك النظام');
+    }
   }
 
   markLocalWrite() { this.lastLocalWriteAt = Date.now(); }
@@ -122,6 +134,7 @@ export class Store {
 
   /* ─── Actions: create / update / remove ─────────────────────── */
   async actCreate(table, record) {
+    this.assertWrite();
     this.markLocalWrite();
     const row = await this.adapter.create(table, record);
     if (row) {
@@ -132,6 +145,7 @@ export class Store {
     return row;
   }
   async actUpdate(table, id, patch) {
+    this.assertWrite();
     this.markLocalWrite();
     const row = await this.adapter.update(table, id, patch);
     if (row) {
@@ -143,6 +157,7 @@ export class Store {
     return row;
   }
   async actRemove(table, id) {
+    this.assertWrite();
     this.markLocalWrite();
     await this.adapter.remove(table, id);
     if (['concepts','products','initiatives','projects'].includes(table)) {
@@ -234,6 +249,7 @@ export class Store {
   }
 
   async importSnapshot(parsed) {
+    this.assertWrite();
     if (!parsed || parsed.meta?.app !== 'manzuma-workbench' || !parsed.data) {
       throw new Error('ملف غير صالح — ليس نسخة احتياطية من الورشة');
     }
@@ -247,7 +263,7 @@ export class Store {
   async logAudit(entry) {
     const row = await this.adapter.logAudit({
       ...entry,
-      actor: entry.actor || 'workbench-user',
+      actor: entry.actor || this.auth?.user?.email || 'workbench-user',
       created_at: new Date().toISOString()
     });
     if (row) {
@@ -262,6 +278,7 @@ export class Store {
 
   /* ─── Baseline ──────────────────────────────────────────────── */
   async setBaseline(name='', description='') {
+    this.assertWrite();
     const snapshot = structuredClone(this.state);
     delete snapshot.baselines;
     delete snapshot.audit_log;

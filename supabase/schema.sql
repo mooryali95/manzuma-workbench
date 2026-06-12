@@ -176,3 +176,14 @@ CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
 -- Realtime: wb_portfolios, wb_concepts, wb_items, wb_project_phases,
 -- wb_formations, wb_formation_members, wb_formation_entities,
 -- wb_individuals, wb_entities → added to publication supabase_realtime.
+
+
+-- ═══════════════════════════════════════════════════════════════
+-- v4.4 (migration: wb_v44_auth_rls) — المصادقة والأدوار
+-- wb_user_roles(user_id, email, role∈{owner,editor,viewer,pending})
+-- Trigger: أول مستخدم owner، البقية pending.
+-- دوال: wb_current_role / wb_can_read / wb_can_write / wb_is_admin
+-- RLS: anon محجوب كلياً؛ SELECT للأدوار الفعّالة؛ كتابة owner/editor؛
+--      wb_audit_log إضافة-فقط. RPCs (owner): wb_list_users / wb_set_user_role.
+-- ClickUp RPCs: EXECUTE للمصادَقين فقط (سُحبت من anon).
+-- النص الكامل في تاريخ الترحيلات على Supabase.

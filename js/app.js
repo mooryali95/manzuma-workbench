@@ -22,12 +22,15 @@ import { renderPortfolios } from './views/portfolios.js';
 import { renderPortfolioDetail } from './views/portfolio.js';
 import { renderProjectDetail } from './views/project.js';
 import { renderWorkbench } from './views/workbench.js';
+import { AuthManager, ROLE_LABELS } from './auth.js';
+import { renderLogin, renderPending } from './views/login.js';
 import { toastError, toastSuccess } from './components/toast.js';
 import { openForm, confirm as confirmDialog } from './components/modal.js';
 import { escapeText as escape } from './utils.js';
 
 let store = null;
 let router = null;
+let auth = null;
 
 /* ─── Router (hash-based) ───────────────────────────────────────── */
 class Router {
@@ -99,6 +102,14 @@ class Router {
 
 /* ─── Header (global app header outside the view) ───────────────── */
 function renderShellHeader(rootHeader) {
+  const canWrite = auth ? auth.canWrite : true;
+  const userChip = auth?.user ? `
+      <div class="user-chip" title="${escape(auth.user.email)}">
+        <span class="user-role" data-role="${escape(auth.role)}">${escape(ROLE_LABELS[auth.role] || auth.role)}</span>
+        <span class="user-email" dir="ltr">${escape(auth.user.email)}</span>
+        <button class="btn-icon sm" id="btn-signout" title="تسجيل الخروج">⎋</button>
+      </div>` : '';
+
   rootHeader.innerHTML = `
     <div class="lhs">
       <h1 class="h1">${escape(APP.name_ar)}</h1>
@@ -109,16 +120,27 @@ function renderShellHeader(rootHeader) {
         <span class="conn-dot"></span>
         <span id="conn-text">جارٍ الاتصال…</span>
       </div>
+      ${userChip}
+      ${auth?.isOwner ? '<button class="btn" id="btn-users">👥 المستخدمون</button>' : ''}
       <button class="btn" id="btn-export" title="تصدير نسخة احتياطية JSON">⇩ تصدير</button>
-      <button class="btn" id="btn-import" title="استيراد نسخة احتياطية JSON">⇪ استيراد</button>
-      <button class="btn" id="btn-baseline">🎯 تثبيت Baseline</button>
+      ${canWrite ? '<button class="btn" id="btn-import" title="استيراد نسخة احتياطية JSON">⇪ استيراد</button>' : ''}
+      ${canWrite ? '<button class="btn" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
       <a class="btn" href="#workbench">🛠 الورشة</a>
       <a class="btn" href="#portfolios">📊 المحافظ</a>
     </div>
   `;
 
+  /* تسجيل الخروج */
+  rootHeader.querySelector('#btn-signout')?.addEventListener('click', async () => {
+    await auth.signOut();
+    location.reload();
+  });
+
+  /* إدارة المستخدمين (owner) */
+  rootHeader.querySelector('#btn-users')?.addEventListener('click', () => openUsersModal());
+
   /* تصدير JSON (v4.3) */
-  rootHeader.querySelector('#btn-export').addEventListener('click', () => {
+  rootHeader.querySelector('#btn-export')?.addEventListener('click', () => {
     try {
       const snap = store.exportSnapshot();
       const blob = new Blob([JSON.stringify(snap, null, 2)], { type:'application/json' });
@@ -132,7 +154,7 @@ function renderShellHeader(rootHeader) {
   });
 
   /* استيراد JSON (v4.3) — معاينة الأعداد ثم تأكيد قبل الدمج */
-  rootHeader.querySelector('#btn-import').addEventListener('click', () => {
+  rootHeader.querySelector('#btn-import')?.addEventListener('click', () => {
     const inp = document.createElement('input');
     inp.type = 'file';
     inp.accept = 'application/json,.json';
@@ -177,7 +199,7 @@ function renderShellHeader(rootHeader) {
     inp.click();
   });
 
-  rootHeader.querySelector('#btn-baseline').addEventListener('click', () => {
+  rootHeader.querySelector('#btn-baseline')?.addEventListener('click', () => {
     openForm({
       title: 'تثبيت Baseline جديد',
       fields: [
@@ -193,6 +215,45 @@ function renderShellHeader(rootHeader) {
         } catch (e) { toastError('فشل: ' + e.message); }
       }
     });
+  });
+}
+
+/* ─── نافذة إدارة المستخدمين (v4.4 — owner فقط) ─────────────────── */
+async function openUsersModal() {
+  let users;
+  try {
+    users = await store.adapter.listUsers();
+  } catch (e) { toastError('فشل جلب المستخدمين: ' + e.message); return; }
+
+  if (!users.length) { toastError('لا يوجد مستخدمون بعد'); return; }
+
+  const roleOpts = Object.entries(ROLE_LABELS).map(([v, l]) => ({ value: v, label: l }));
+  const fields = users.map(u => ({
+    name: u.user_id,
+    label: `${u.email}${u.last_sign_in_at ? '' : ' · لم يدخل بعد'}`,
+    type: 'select',
+    value: u.role,
+    options: roleOpts
+  }));
+
+  openForm({
+    title: `إدارة المستخدمين (${users.length})`,
+    fields,
+    confirmLabel: 'حفظ الأدوار',
+    confirm: async (data) => {
+      const changes = users.filter(u => data[u.user_id] && data[u.user_id] !== u.role);
+      if (!changes.length) { toastSuccess('لا تغييرات'); return; }
+      try {
+        for (const u of changes) {
+          await store.adapter.setUserRole(u.user_id, data[u.user_id]);
+          await store.logAudit({
+            action: 'role_change', entity_type: 'user', entity_id: u.user_id,
+            summary_ar: `تغيير دور ${u.email}: ${ROLE_LABELS[u.role]} ← ${ROLE_LABELS[data[u.user_id]]}`
+          });
+        }
+        toastSuccess(`تم تحديث ${changes.length} دور`);
+      } catch (e) { toastError('فشل: ' + e.message); }
+    }
   });
 }
 
@@ -230,22 +291,51 @@ async function boot() {
     adapter = new SupabaseAdapter();
   }
 
-  /* Init + load */
+  /* Init adapter (creates the Supabase client; no data reads yet) */
   try {
     await adapter.init();
-    if (BACKEND === 'supabase') setConn('ok', 'متصل بـ Supabase');
   } catch (e) {
     console.error('Adapter init failed:', e);
     toastError('فشل الاتصال بـ Supabase — التحول إلى الوضع المحلي');
     setConn('error', 'فشل الاتصال');
-    /* Fallback to local */
     adapter = new LocalAdapter();
     await adapter.init();
     setConn('local', 'محلي (احتياطي)');
   }
 
+  /* ─── بوابة المصادقة (v4.4) — قبل أي تحميل للبيانات ─── */
+  if (BACKEND === 'supabase' && adapter.client) {
+    auth = new AuthManager(adapter.client);
+    setConn('loading', 'التحقق من الجلسة…');
+    await auth.restore();
+
+    if (!auth.user) {
+      setConn('local', 'غير مسجّل');
+      await new Promise((resolve) => {
+        renderLogin(appRoot, auth, () => resolve());
+      });
+    }
+
+    /* مسجّل لكن بانتظار التفعيل */
+    if (auth.user && !auth.canRead) {
+      setConn('local', 'بانتظار التفعيل');
+      renderPending(appRoot, auth, () => location.reload());
+      return;
+    }
+
+    setConn('ok', 'متصل بـ Supabase');
+    /* خروج من تبويب آخر → عودة لشاشة الدخول */
+    auth.onChange((event) => { if (event === 'SIGNED_OUT') location.reload(); });
+  }
+
   store = new Store(adapter);
+  if (auth) store.attachAuth(auth);
+  document.body.dataset.wbRole = auth ? auth.role : 'editor';
   router = new Router();
+
+  /* أعد رسم الترويسة الآن بعد توفر المستخدم والدور */
+  renderShellHeader(document.getElementById('shell-header'));
+  if (BACKEND === 'supabase' && auth) setConn('ok', 'متصل بـ Supabase');
 
   try {
     await store.boot();

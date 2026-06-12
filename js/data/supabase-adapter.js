@@ -53,10 +53,10 @@ export class SupabaseAdapter extends DataAdapter {
   async init() {
     const mod = await import(SUPABASE_ESM);
     this.client = mod.createClient(SUPABASE.url, SUPABASE.anon, {
-      auth: { persistSession: false }
+      auth: { persistSession: true, autoRefreshToken: true }
     });
-    const { error } = await this.client.from('wb_portfolios').select('id', { head:true, count:'exact' });
-    if (error) throw new Error('Supabase init failed: ' + error.message);
+    /* v4.4: لا فحص للبيانات هنا — RLS يمنع القراءة قبل المصادقة.
+       يكفي نجاح إنشاء العميل؛ التحقق الفعلي يتم بعد تسجيل الدخول. */
     return true;
   }
 
@@ -209,6 +209,19 @@ export class SupabaseAdapter extends DataAdapter {
 
   async deleteBaseline(id) {
     const { error } = await this.client.from('wb_baselines').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  }
+
+  /* ─── User management (v4.4 — owner only, enforced in DB) ────── */
+  async listUsers() {
+    const { data, error } = await this.client.rpc('wb_list_users');
+    if (error) throw error;
+    return data || [];
+  }
+
+  async setUserRole(userId, role) {
+    const { error } = await this.client.rpc('wb_set_user_role', { target: userId, new_role: role });
     if (error) throw error;
     return true;
   }
