@@ -14,6 +14,15 @@ import { APP } from '../../config.js';
 
 const KIND_LABEL = { product:'منتج', initiative:'مبادرة', project:'مشروع' };
 const KIND_ICON  = { product:'📦', initiative:'🚀', project:'🏗' };
+/* مفتاح الرموز — ترميز مزدوج (أيقونة + لون) وفق أفضل ممارسات Data Viz */
+const LEGEND = [
+  { ic:'🏛', label:'المجلس',  cls:'lg-root' },
+  { ic:'🗂', label:'محفظة',   cls:'lg-pf' },
+  { ic:'💡', label:'مفهوم',   cls:'lg-concept' },
+  { ic:'📦', label:'منتج',    cls:'lg-product' },
+  { ic:'🚀', label:'مبادرة',  cls:'lg-initiative' },
+  { ic:'🏗', label:'مشروع',   cls:'lg-project' }
+];
 const today = () => new Date().toISOString().slice(0, 10);
 
 /* حالة العرض خلال الجلسة */
@@ -82,6 +91,13 @@ export function renderTree(root, store, router) {
     wrap.classList.toggle('oc-theatre', ocState.theatre);
     theatreBtn.classList.toggle('active', ocState.theatre);
     theatreBtn.textContent = ocState.theatre ? '✕ خروج من العرض' : '🎦 وضع العرض';
+    tools.classList.toggle('theatre-tools', ocState.theatre);
+  };
+  const exitTheatre = async () => {
+    ocState.theatre = false;
+    applyTheatre();
+    try { if (document.fullscreenElement) await document.exitFullscreen(); } catch {}
+    draw();
   };
   theatreBtn.addEventListener('click', async () => {
     ocState.theatre = !ocState.theatre;
@@ -92,12 +108,21 @@ export function renderTree(root, store, router) {
     } catch { /* المتصفح قد يمنع — الوضع الداكن يعمل بدونه */ }
     draw();
   });
+  /* Esc يخرج دائماً + زر عائم (يُحقن في draw) */
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ocState.theatre) exitTheatre(); });
+  wrap._exitTheatre = exitTheatre;
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && ocState.theatre) {
       ocState.theatre = false; applyTheatre(); draw();
     }
   });
   applyTheatre();
+  /* في وضع العرض تختفي أدوات التحرير (تصدير/استيراد/فتح/إغلاق) */
+  const syncToolsVisibility = () => {
+    tools.classList.toggle('theatre-tools', ocState.theatre);
+  };
+  syncToolsVisibility();
+  const _origApplyTheatre = applyTheatre;
 
   /* أطوار العرض */
   const markLayout = () => tools.querySelectorAll('#oc-layouts .btn').forEach(b =>
@@ -278,6 +303,8 @@ function drawChart(wrap, model, store, router) {
   if (layout === 'stack') {
     /* ☰ أكورديون عمودي للجوال */
     wrap.innerHTML = `
+      ${ocState.theatre ? '<button class="oc-exit-fab" id="oc-exit" aria-label="خروج من وضع العرض">✕ خروج (Esc)</button>' : ''}
+      ${legendHtml()}
       <div class="oc-content oc-stack">
         ${rootCard}
         ${visPortfolios.map(p => {
@@ -296,6 +323,8 @@ function drawChart(wrap, model, store, router) {
   } else {
     /* 🖥 شجرة (موصلات SVG) أو ▦ شبكة */
     wrap.innerHTML = `
+      ${ocState.theatre ? '<button class="oc-exit-fab" id="oc-exit" aria-label="خروج من وضع العرض">✕ خروج (Esc)</button>' : ''}
+      ${legendHtml()}
       <div class="oc-content oc-${layout}">
         <div class="oc-root-row">${rootCard}</div>
         <div class="oc-cols">
@@ -393,7 +422,17 @@ function drawConnectors(wrap) {
   svg.innerHTML = `<g class="oc-lines">${paths}</g>`;
 }
 
+function legendHtml() {
+  return `<div class="oc-legend" role="list" aria-label="مفتاح الرموز">
+    ${LEGEND.map(l => `<span class="lg-item ${l.cls}" role="listitem">
+      <span class="lg-ic">${l.ic}</span>${escapeText(l.label)}</span>`).join('')}
+  </div>`;
+}
+
 function wireInteractions(wrap, model, store, router) {
+  const exitBtn = wrap.querySelector('#oc-exit');
+  if (exitBtn && wrap._exitTheatre) exitBtn.addEventListener('click', () => wrap._exitTheatre());
+
   wrap.querySelectorAll('[data-acc]').forEach(el =>
     el.addEventListener('click', () => {
       const k = String(el.dataset.acc);
@@ -492,8 +531,9 @@ function itemRowHtml(n, card, pf, store, hit) {
        data-nav-kind="${escapeText(n.item._kind)}"
        data-nav-pf="${escapeText(effPf || pf.id)}"
        data-nav-concept="${escapeText(n.item.parent_id)}"
-       role="link" tabindex="0">
-    <span class="oc-item-icon">${KIND_ICON[n.item._kind] || '▫️'}</span>
+       role="link" tabindex="0"
+       title="${escapeText(KIND_LABEL[n.item._kind] || '')} · ${escapeText(statusLabelAr(n.status))}${n.progress !== null ? ' · ' + n.progress + '%' : ''}${n.overdue ? ' · ' + n.overdue + ' متأخرة' : ''}">
+    <span class="oc-item-icon" aria-label="${escapeText(KIND_LABEL[n.item._kind] || '')}">${KIND_ICON[n.item._kind] || '▫️'}</span>
     <span class="oc-item-name">${escapeText(n.item.name)}</span>
     ${card.kind === 'incoming' && n.homeConcept
       ? `<span class="tn-tag">↩ ${escapeText(n.homeConcept.name)}</span>` : ''}

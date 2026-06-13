@@ -820,3 +820,53 @@
 @media (prefers-reduced-motion: reduce){
   .oc-ring .ring-fg, .oc-card, .oc-pf-head{ transition:none !important; }
 }
+
+/* ═══ v5.4 — مفتاح الرموز + خروج العرض ═══════════════════════════ */
+
+/* المفتاح (Legend) — ترميز مزدوج */
+.oc-legend{
+  display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+  margin-bottom:16px; padding:8px 12px;
+  background:rgba(0,0,0,0.02); border:1px solid var(--line);
+  border-radius:var(--r-pill); width:fit-content; margin-inline:auto;
+}
+.lg-item{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:var(--fs-2xs); font-weight:700; color:var(--ink-2);
+  padding:3px 10px; border-radius:var(--r-pill);
+  border:1px solid transparent;
+}
+.lg-ic{ font-size:var(--fs-sm); }
+.lg-root{ background:rgba(22,58,44,0.08); color:var(--brand-green); }
+.lg-pf{ background:rgba(201,162,39,0.10); color:var(--brand-gold-deep); }
+.lg-concept{ background:rgba(55,138,221,0.10); color:#2A5B9E; }
+.lg-product{ background:rgba(0,0,0,0.04); }
+.lg-initiative{ background:rgba(0,0,0,0.04); }
+.lg-project{ background:rgba(0,0,0,0.04); }
+
+/* زر الخروج العائم (وضع العرض) — ثابت أعلى يسار، فوق كل شيء */
+.oc-exit-fab{
+  position:fixed; top:18px; inset-inline-start:18px; z-index:9999;
+  background:rgba(255,255,255,0.12); color:#fff;
+  border:1.5px solid var(--brand-gold-bright);
+  padding:10px 18px; border-radius:var(--r-pill);
+  font-size:var(--fs-sm); font-weight:700; cursor:pointer;
+  backdrop-filter:blur(8px);
+  box-shadow:0 4px 16px rgba(0,0,0,0.35);
+  transition:background .15s ease;
+}
+.oc-exit-fab:hover{ background:var(--brand-gold-bright); color:var(--brand-green-deep); }
+
+/* في وضع العرض: المفتاح يتكيّف مع المسرح الداكن */
+.oc-theatre .oc-legend{
+  background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.15);
+}
+.oc-theatre .lg-item{ color:rgba(255,255,255,0.85); }
+.oc-theatre .lg-root,
+.oc-theatre .lg-pf,
+.oc-theatre .lg-concept{ color:#fff; }
+
+/* في وضع العرض: إخفاء أدوات التحرير، إبقاء البحث والتكبير */
+.tree-tools.theatre-tools #oc-expand,
+.tree-tools.theatre-tools #oc-collapse,
+.tree-tools.theatre-tools #oc-layouts{ display:none; }
