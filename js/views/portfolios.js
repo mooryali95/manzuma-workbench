@@ -122,15 +122,6 @@ export function renderPortfolios(root, store, router) {
 
   root.appendChild(kanban);
 
-  /* ─── Changes panel ─── */
-  const changesPanel = document.createElement('section');
-  changesPanel.className = 'changes-panel';
-  changesPanel.innerHTML = `
-    <h3>سجل التغييرات الأخيرة</h3>
-    <div class="changes-list" id="audit-list"></div>
-  `;
-  root.appendChild(changesPanel);
-  renderAuditList(changesPanel.querySelector('#audit-list'), s.audit_log || []);
 }
 
 function renderConceptCard(concept, store, router) {
@@ -160,7 +151,7 @@ function renderConceptCard(concept, store, router) {
   return card;
 }
 
-function renderAuditList(root, log) {
+export function renderAuditList(root, log) {
   root.innerHTML = '';
   if (!log.length) {
     root.innerHTML = '<div style="font-size:11px;color:var(--ink-4);padding:8px 0">لا توجد تغييرات بعد</div>';

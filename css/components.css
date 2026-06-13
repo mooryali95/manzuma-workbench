@@ -483,7 +483,7 @@ body[data-wb-role="viewer"] [data-edit]{
 /* قائمة الأدوات المنسدلة */
 .tools-menu{ position:relative; }
 .tools-pop{
-  position:absolute; top:calc(100% + 6px); inset-inline-start:0; z-index:50;
+  position:absolute; top:calc(100% + 6px); inset-inline-start:0; z-index:calc(var(--z-modal) - 1);
   min-width:210px; background:#FFF; border:1px solid var(--line);
   border-radius:var(--r-md); padding:6px;
   box-shadow:var(--shadow-3);
@@ -582,3 +582,8 @@ body[data-wb-role="viewer"] [data-edit]{
   .sk::after{ animation:none; }
   .modal.shake{ animation:none; }
 }
+
+/* v5.5: نافذة سجل التغييرات */
+.audit-modal{ max-width:560px; width:92vw; }
+.audit-modal .modal-body{ max-height:60vh; overflow-y:auto; }
+.audit-modal .changes-list{ display:flex; flex-direction:column; gap:2px; }

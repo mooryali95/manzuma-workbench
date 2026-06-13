@@ -23,6 +23,7 @@ import { renderPortfolioDetail } from './views/portfolio.js';
 import { renderProjectDetail } from './views/project.js';
 import { renderWorkbench } from './views/workbench.js';
 import { renderTree } from './views/tree.js';
+import { renderAuditList } from './views/portfolios.js';
 import { AuthManager, ROLE_LABELS } from './auth.js';
 import { renderLogin, renderPending } from './views/login.js';
 import { toastError, toastSuccess, toastInfo } from './components/toast.js';
@@ -168,25 +169,45 @@ function renderShellHeader(rootHeader) {
           <button class="tools-item" id="btn-export">⇩ تصدير نسخة احتياطية</button>
           ${canWrite ? '<button class="tools-item" id="btn-import">⇪ استيراد نسخة احتياطية</button>' : ''}
           ${canWrite ? '<button class="tools-item" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
+          ${auth?.isOwner ? '<button class="tools-item" id="btn-audit">📜 سجل التغييرات</button>' : ''}
           ${auth?.isOwner ? '<button class="tools-item" id="btn-users">👥 المستخدمون</button>' : ''}
         </div>
       </div>
     </div>
   `;
 
-  /* قائمة الأدوات: فتح/إغلاق + إغلاق بالنقر خارجها أو Esc */
+  /* قائمة الأدوات: فتح/إغلاق نظيف بلا تسريب مستمعين */
   const toolsBtn = rootHeader.querySelector('#btn-tools');
   const toolsPop = rootHeader.querySelector('#tools-pop');
   if (toolsBtn && toolsPop) {
     const closePop = () => { toolsPop.hidden = true; toolsBtn.setAttribute('aria-expanded', 'false'); };
+    const openPop  = () => { toolsPop.hidden = false; toolsBtn.setAttribute('aria-expanded', 'true'); };
     toolsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      toolsPop.hidden = !toolsPop.hidden;
-      toolsBtn.setAttribute('aria-expanded', String(!toolsPop.hidden));
+      toolsPop.hidden ? openPop() : closePop();
     });
-    document.addEventListener('click', (e) => { if (!toolsPop.contains(e.target)) closePop(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
-    toolsPop.addEventListener('click', () => closePop());
+    toolsPop.addEventListener('click', () => closePop());           /* أي عنصر يُغلق */
+    /* مستمع document واحد فقط (يُسجَّل مرة عبر العَلَم) */
+    if (!window._toolsPopGlobalBound) {
+      window._toolsPopGlobalBound = true;
+      document.addEventListener('click', (e) => {
+        const pop = document.getElementById('tools-pop');
+        const btn = document.getElementById('btn-tools');
+        if (pop && !pop.hidden && !pop.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+          pop.hidden = true; btn?.setAttribute('aria-expanded', 'false');
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          const pop = document.getElementById('tools-pop');
+          if (pop) { pop.hidden = true; document.getElementById('btn-tools')?.setAttribute('aria-expanded','false'); }
+        }
+      });
+      window.addEventListener('hashchange', () => {
+        const pop = document.getElementById('tools-pop');
+        if (pop) pop.hidden = true;
+      });
+    }
   }
 
   /* الحالة النشطة لروابط التنقل (مبدأ Visibility of System Status) */
@@ -208,6 +229,9 @@ function renderShellHeader(rootHeader) {
     await auth.signOut();
     location.reload();
   });
+
+  /* سجل التغييرات (owner) */
+  rootHeader.querySelector('#btn-audit')?.addEventListener('click', () => openAuditModal());
 
   /* إدارة المستخدمين (owner) */
   rootHeader.querySelector('#btn-users')?.addEventListener('click', () => openUsersModal());
@@ -365,6 +389,40 @@ async function openUsersModal() {
       } catch (e) { toastError('فشل: ' + e.message); }
     }
   });
+}
+
+/* ─── نافذة سجل التغييرات (v5.5 — للأدمن، عبر الأدوات) ─── */
+function openAuditModal() {
+  ensureAuditModal();
+  const m = document.getElementById('audit-modal');
+  const list = m.querySelector('#audit-modal-list');
+  renderAuditList(list, store.state.audit_log || []);
+  m.dataset.open = 'true';
+  document.getElementById('audit-backdrop').dataset.open = 'true';
+}
+function ensureAuditModal() {
+  if (document.getElementById('audit-modal')) return;
+  const bd = document.createElement('div');
+  bd.className = 'backdrop'; bd.id = 'audit-backdrop';
+  bd.addEventListener('click', closeAuditModal);
+  document.body.appendChild(bd);
+  const m = document.createElement('div');
+  m.className = 'modal audit-modal'; m.id = 'audit-modal';
+  m.innerHTML = `
+    <div class="modal-head"><h3>📜 سجل التغييرات</h3></div>
+    <div class="modal-body"><div class="changes-list" id="audit-modal-list"></div></div>
+    <div class="modal-foot"><button class="btn" id="audit-close">إغلاق</button></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#audit-close').addEventListener('click', closeAuditModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && m.dataset.open === 'true') closeAuditModal();
+  });
+}
+function closeAuditModal() {
+  const m = document.getElementById('audit-modal');
+  if (m) m.dataset.open = 'false';
+  const bd = document.getElementById('audit-backdrop');
+  if (bd) bd.dataset.open = 'false';
 }
 
 function setConn(state, text) {
