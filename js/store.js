@@ -32,7 +32,10 @@ export class Store {
 
   assertWrite() {
     if (!this.canWrite) {
-      throw new Error('صلاحيتك للقراءة فقط — اطلب ترقية الدور من مالك النظام');
+      const msg = this.isProposer
+        ? 'هذه العملية (حذف/تشكيلات) تتطلب اعتماد المالك ولا تُقترَح حالياً'
+        : 'صلاحيتك للقراءة فقط — اطلب ترقية الدور من مالك النظام';
+      throw new Error(msg);
     }
   }
 
@@ -265,6 +268,7 @@ export class Store {
 
   /* ─── Composite actions (M:N) ───────────────────────────────── */
   async actAddMember(formationId, individualId) {
+    this.assertWrite();
     this.markLocalWrite();
     if (this.adapter.addMember) {
       await this.adapter.addMember(formationId, individualId);
@@ -276,6 +280,7 @@ export class Store {
     this.emit();
   }
   async actRemoveMember(formationId, individualId) {
+    this.assertWrite();
     this.markLocalWrite();
     if (this.adapter.removeMember) {
       await this.adapter.removeMember(formationId, individualId);
@@ -285,6 +290,7 @@ export class Store {
     this.emit();
   }
   async actAddEntityToFormation(formationId, entityId) {
+    this.assertWrite();
     this.markLocalWrite();
     if (this.adapter.addFormationEntity) {
       await this.adapter.addFormationEntity(formationId, entityId);
@@ -296,6 +302,7 @@ export class Store {
     this.emit();
   }
   async actRemoveEntityFromFormation(formationId, entityId) {
+    this.assertWrite();
     this.markLocalWrite();
     if (this.adapter.removeFormationEntity) {
       await this.adapter.removeFormationEntity(formationId, entityId);
