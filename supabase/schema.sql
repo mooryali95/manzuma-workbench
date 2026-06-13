@@ -208,3 +208,8 @@ CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
 -- م3: فهرس idx_maturity_history_parent
 -- سحب EXECUTE من anon عن wb_can_read/write/current_role/is_admin (الورشة خلف المصادقة)
 -- ملاحظة: wb_capture_history(_mn) دوال trigger داخلية — تحذير Advisor إيجابية كاذبة، أُبقيت.
+
+-- v5.6 (migration: wb_v56_proposals):
+-- دور contributor + جدول wb_proposals (RLS: المقترِح يرى مقترحاته، المالك الكل)
+-- RPCs (المالك): wb_approve_proposal / wb_reject_proposal / wb_pending_count
+-- الاعتماد يطبّق العملية على الجدول الفعلي ويسجّل في wb_audit_log.

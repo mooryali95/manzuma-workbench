@@ -84,16 +84,18 @@ export class AuthManager {
     });
   }
 
-  get canRead()  { return ['owner','editor','viewer'].includes(this.role); }
-  get canWrite() { return ['owner','editor'].includes(this.role); }
-  get isOwner()  { return this.role === 'owner'; }
+  get canRead()    { return ['owner','editor','contributor','viewer'].includes(this.role); }
+  get canWrite()   { return ['owner','editor'].includes(this.role); }
+  get canPropose() { return this.role === 'contributor'; }   /* يقترح فقط */
+  get isOwner()    { return this.role === 'owner'; }
 }
 
 export const ROLE_LABELS = {
-  owner:   'مالك',
-  editor:  'محرر',
-  viewer:  'مشاهد',
-  pending: 'بانتظار التفعيل'
+  owner:       'مالك',
+  editor:      'محرر',
+  contributor: 'مقترِح',
+  viewer:      'مشاهد',
+  pending:     'بانتظار التفعيل'
 };
 
 /* ترجمة أشهر رسائل أخطاء Supabase Auth */

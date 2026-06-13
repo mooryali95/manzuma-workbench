@@ -11,6 +11,7 @@
  */
 
 import { migrate } from './schema.js';
+import { toastSuccess } from './components/toast.js';
 
 export class Store {
 
@@ -33,6 +34,37 @@ export class Store {
     if (!this.canWrite) {
       throw new Error('صلاحيتك للقراءة فقط — اطلب ترقية الدور من مالك النظام');
     }
+  }
+
+  get isProposer() { return this.auth ? this.auth.canPropose : false; }
+
+  /* بوابة المقترحات (v5.6): إن كان المستخدم مقترِحاً، حوّل الكتابة لمقترح
+     معلّق بدل تطبيقها. يرمي PROPOSAL_SUBMITTED ليعرض UI رسالة مناسبة. */
+  async _maybePropose(op, table, recordOrId, patch, summary) {
+    if (!this.isProposer) return false;
+    /* الاسم المنطقي → الجدول الفعلي + entity_type للعناصر */
+    const ITEM_KIND = { products:'منتج', initiatives:'مبادرة', projects:'مشروع' };
+    const dbTable = ITEM_KIND[table] ? 'wb_items'
+                  : ({ concepts:'wb_concepts', portfolios:'wb_portfolios',
+                       individuals:'wb_individuals', entities:'wb_entities',
+                       formations:'wb_formations', project_phases:'wb_project_phases' }[table] || table);
+    let payload = op === 'create' ? { ...recordOrId } : { ...patch };
+    if (ITEM_KIND[table] && op === 'create') payload.entity_type = ITEM_KIND[table];
+    const recordId = op === 'create' ? (recordOrId.id || null) : recordOrId;
+    let before = null;
+    if (op !== 'create') {
+      const arr = this.state[table] || [];
+      before = arr.find(r => String(r.id) === String(recordId)) || null;
+    }
+    await this.adapter.createProposal({
+      op, target_table: dbTable, record_id: recordId ? String(recordId) : null,
+      payload, before_data: before, summary_ar: summary || null,
+      proposer_email: this.auth?.user?.email || null
+    });
+    toastSuccess('أُرسل تعديلك كمقترح — بانتظار اعتماد المالك');
+    const e = new Error('PROPOSAL_SUBMITTED');
+    e.code = 'PROPOSAL_SUBMITTED';
+    throw e;
   }
 
   markLocalWrite() { this.lastLocalWriteAt = Date.now(); }
@@ -190,7 +222,8 @@ export class Store {
   }
 
   /* ─── Actions: create / update / remove ─────────────────────── */
-  async actCreate(table, record) {
+  async actCreate(table, record, summary) {
+    if (await this._maybePropose('create', table, record, null, summary)) return null;
     this.assertWrite();
     this.markLocalWrite();
     const row = await this.adapter.create(table, record);
@@ -201,7 +234,8 @@ export class Store {
     }
     return row;
   }
-  async actUpdate(table, id, patch) {
+  async actUpdate(table, id, patch, summary) {
+    if (await this._maybePropose('update', table, id, patch, summary)) return null;
     this.assertWrite();
     this.markLocalWrite();
     const row = await this.adapter.update(table, id, patch);

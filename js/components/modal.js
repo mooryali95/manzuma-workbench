@@ -57,6 +57,10 @@ function ensure() {
       try {
         const r = await onConfirm(result);          /* انتظار حقيقي للوعود */
         if (r === false) return;                    /* رفض تحقق من المستدعي — يبقى مفتوحاً */
+      } catch (err) {
+        if (err && err.code === 'PROPOSAL_SUBMITTED') {
+          /* مقترِح: أُرسل كمقترح معلّق — نغلق بهدوء (المستدعي يعرض التوست) */
+        } else { throw err; }
       } finally {
         btn.dataset.busy = '';
         btn.textContent = oldLabel;

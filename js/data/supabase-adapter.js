@@ -232,6 +232,34 @@ export class SupabaseAdapter extends DataAdapter {
     return true;
   }
 
+  /* ─── Proposals (v5.6) ───────────────────────────────────────── */
+  async createProposal(p) {
+    const { data, error } = await this.client.from('wb_proposals').insert(p).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async listProposals(status = 'pending') {
+    const { data, error } = await this.client.from('wb_proposals')
+      .select('*').eq('status', status).order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+  async approveProposal(id, note) {
+    const { error } = await this.client.rpc('wb_approve_proposal', { prop_id: id, note: note || null });
+    if (error) throw error;
+    return true;
+  }
+  async rejectProposal(id, note) {
+    const { error } = await this.client.rpc('wb_reject_proposal', { prop_id: id, note: note || null });
+    if (error) throw error;
+    return true;
+  }
+  async pendingCount() {
+    const { data, error } = await this.client.rpc('wb_pending_count');
+    if (error) return 0;
+    return data || 0;
+  }
+
   /* ─── Realtime (v4.3) ────────────────────────────────────────── */
   /* One channel listening to all workbench display tables.
      The callback receives the raw postgres_changes payload;

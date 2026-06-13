@@ -42,6 +42,13 @@ export class DataAdapter {
   async listBaselines() { throw new Error('listBaselines() not implemented'); }
   async deleteBaseline(id) { throw new Error('deleteBaseline() not implemented'); }
 
+  /* ─── Proposals (optional) ─── */
+  async createProposal() { throw new Error('المقترحات تتطلب Supabase'); }
+  async listProposals() { return []; }
+  async approveProposal() { throw new Error('not implemented'); }
+  async rejectProposal() { throw new Error('not implemented'); }
+  async pendingCount() { return 0; }
+
   /* ─── Snapshot import (backup restore, optional) ─── */
   async importSnapshot(snapshot) { throw new Error('importSnapshot() not implemented'); }
 

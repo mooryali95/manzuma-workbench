@@ -169,6 +169,7 @@ function renderShellHeader(rootHeader) {
           <button class="tools-item" id="btn-export">⇩ تصدير نسخة احتياطية</button>
           ${canWrite ? '<button class="tools-item" id="btn-import">⇪ استيراد نسخة احتياطية</button>' : ''}
           ${canWrite ? '<button class="tools-item" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
+          ${auth?.isOwner ? '<button class="tools-item" id="btn-proposals">📥 المقترحات <span class="pending-badge" id="pending-badge" hidden></span></button>' : ''}
           ${auth?.isOwner ? '<button class="tools-item" id="btn-audit">📜 سجل التغييرات</button>' : ''}
           ${auth?.isOwner ? '<button class="tools-item" id="btn-users">👥 المستخدمون</button>' : ''}
         </div>
@@ -229,6 +230,9 @@ function renderShellHeader(rootHeader) {
     await auth.signOut();
     location.reload();
   });
+
+  /* المقترحات (owner) */
+  rootHeader.querySelector('#btn-proposals')?.addEventListener('click', () => openProposalsModal());
 
   /* سجل التغييرات (owner) */
   rootHeader.querySelector('#btn-audit')?.addEventListener('click', () => openAuditModal());
@@ -391,6 +395,105 @@ async function openUsersModal() {
   });
 }
 
+/* ─── لوحة مراجعة المقترحات (v5.6 — للمالك) ─── */
+async function openProposalsModal() {
+  let props;
+  try { props = await store.adapter.listProposals('pending'); }
+  catch (e) { toastError('تعذّر جلب المقترحات: ' + e.message); return; }
+
+  ensureProposalsModal();
+  const m = document.getElementById('prop-modal');
+  const list = m.querySelector('#prop-list');
+  if (!props.length) {
+    list.innerHTML = '<div class="prop-empty">لا مقترحات معلّقة 🎉</div>';
+  } else {
+    const OP = { create:'إضافة', update:'تعديل', delete:'حذف' };
+    list.innerHTML = props.map(p => {
+      const fields = p.op === 'update'
+        ? Object.keys(p.payload || {}).map(k =>
+            `<div class="prop-diff"><span class="k">${escape(k)}</span>
+             <span class="before">${escape(String(p.before_data?.[k] ?? '—'))}</span>
+             <span class="arrow">←</span>
+             <span class="after">${escape(String(p.payload[k]))}</span></div>`).join('')
+        : `<div class="prop-payload">${escape(JSON.stringify(p.payload, null, 1).slice(0, 300))}</div>`;
+      return `<div class="prop-card" data-pid="${p.id}">
+        <div class="prop-head">
+          <span class="prop-op prop-op-${p.op}">${OP[p.op] || p.op}</span>
+          <span class="prop-summary">${escape(p.summary_ar || p.target_table)}</span>
+        </div>
+        <div class="prop-meta">من: ${escape(p.proposer_email || '—')} · ${timeAgoSafe(p.created_at)}</div>
+        <div class="prop-body">${fields}</div>
+        <div class="prop-actions">
+          <button class="btn sm danger" data-prop-reject="${p.id}">رفض</button>
+          <button class="btn sm primary" data-prop-approve="${p.id}">اعتماد</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('[data-prop-approve]').forEach(b =>
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+          await store.adapter.approveProposal(Number(b.dataset.propApprove));
+          await store.reload();
+          toastSuccess('تم الاعتماد والتطبيق');
+          openProposalsModal();
+          refreshPendingBadge();
+          router.refresh();
+        } catch (e) { toastError('فشل الاعتماد: ' + e.message); b.disabled = false; }
+      }));
+    list.querySelectorAll('[data-prop-reject]').forEach(b =>
+      b.addEventListener('click', async () => {
+        const note = prompt('سبب الرفض (اختياري):') || null;
+        b.disabled = true;
+        try {
+          await store.adapter.rejectProposal(Number(b.dataset.propReject), note);
+          toastSuccess('تم الرفض');
+          openProposalsModal();
+          refreshPendingBadge();
+        } catch (e) { toastError('فشل الرفض: ' + e.message); b.disabled = false; }
+      }));
+  }
+  m.dataset.open = 'true';
+  document.getElementById('prop-backdrop').dataset.open = 'true';
+}
+function ensureProposalsModal() {
+  if (document.getElementById('prop-modal')) return;
+  const bd = document.createElement('div');
+  bd.className = 'backdrop'; bd.id = 'prop-backdrop';
+  bd.addEventListener('click', () => closeModalById('prop'));
+  document.body.appendChild(bd);
+  const m = document.createElement('div');
+  m.className = 'modal prop-modal'; m.id = 'prop-modal';
+  m.innerHTML = `
+    <div class="modal-head"><h3>📥 مراجعة المقترحات</h3></div>
+    <div class="modal-body"><div id="prop-list"></div></div>
+    <div class="modal-foot"><button class="btn" id="prop-close">إغلاق</button></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#prop-close').addEventListener('click', () => closeModalById('prop'));
+}
+function closeModalById(prefix) {
+  const m = document.getElementById(prefix + '-modal');
+  const bd = document.getElementById(prefix + '-backdrop');
+  if (m) m.dataset.open = 'false';
+  if (bd) bd.dataset.open = 'false';
+}
+function timeAgoSafe(t) {
+  try { const d = (Date.now() - new Date(t)) / 60000;
+    return d < 60 ? `${Math.round(d)} د` : d < 1440 ? `${Math.round(d/60)} س` : `${Math.round(d/1440)} ي`;
+  } catch { return ''; }
+}
+async function refreshPendingBadge() {
+  if (!auth?.isOwner) return;
+  try {
+    const n = await store.adapter.pendingCount();
+    const b = document.getElementById('pending-badge');
+    const t = document.getElementById('btn-tools');
+    if (b) { b.textContent = n; b.hidden = n === 0; }
+    if (t) t.classList.toggle('has-pending', n > 0);
+  } catch {}
+}
+
 /* ─── نافذة سجل التغييرات (v5.5 — للأدمن، عبر الأدوات) ─── */
 function openAuditModal() {
   ensureAuditModal();
@@ -537,6 +640,12 @@ async function boot() {
 
   /* Initial route */
   router.init(appRoot);
+
+  /* v5.6: شارة المقترحات المعلّقة (للمالك) + تحديث دوري خفيف */
+  if (auth?.isOwner) {
+    refreshPendingBadge();
+    setInterval(refreshPendingBadge, 60000);
+  }
 
   /* Realtime (v4.3) — تحديث حي بين الأجهزة */
   if (BACKEND === 'supabase' && adapter.subscribe) {
