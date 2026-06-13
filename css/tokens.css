@@ -100,3 +100,35 @@
   --motion-slow: 320ms;
   --easing:      cubic-bezier(.2,.7,.2,1);
 }
+
+/* ═══ v5.1 — Design Tokens: مصدر الحقيقة الواحد ═══ */
+:root{
+  /* الهوية */
+  --brand-gold:        #C9A227;
+  --brand-gold-deep:   #8A6D2F;
+  --brand-gold-bright: #D4AF37;
+  --brand-gold-soft:   #F3E5BC;
+  --brand-green:       #163A2C;
+  --brand-green-deep:  #0F2E22;
+
+  /* مقياس أنصاف الأقطار (5 قيم بدل 14) */
+  --r-xs:   4px;
+  --r-sm:   10px;
+  --r-md:   12px;
+  --r-lg:   16px;
+  --r-pill: 999px;
+
+  /* المقياس الطباعي (6 درجات بدل 14) */
+  --fs-2xs: 10px;
+  --fs-xs:  11px;
+  --fs-sm:  12px;
+  --fs-md:  13px;
+  --fs-lg:  15px;
+  --fs-xl:  17px;
+  --fs-2xl: 21px;
+
+  /* مقياس الارتفاع البصري */
+  --shadow-1: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-2: 0 4px 14px rgba(0,0,0,0.08);
+  --shadow-3: 0 12px 32px rgba(0,0,0,0.14);
+}
