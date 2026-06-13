@@ -310,7 +310,7 @@ function renderPool(store, router, viewRoot) {
   pool.innerHTML = `
     <div class="pool-header">
       <span class="pool-header-title">العمود الجانبي</span>
-      <button class="pool-toggle" title="تصغير / توسيع">${pool.classList.contains('collapsed') ? '⮜' : '⮞'}</button>
+      <button class="pool-toggle" title="تصغير / توسيع" aria-label="تصغير أو توسيع العمود الجانبي">${pool.classList.contains('collapsed') ? '⮜' : '⮞'}</button>
     </div>
 
     <div class="pool-section" data-pool="individuals">

@@ -460,3 +460,69 @@ body[data-wb-role="viewer"] [data-edit]{
 .pool.collapsed .pool-section,
 .pool.collapsed .pool-header-title{ display:none; }
 .pool.collapsed .pool-header{ justify-content:center; }
+
+/* ═══ v5.0 — تدقيق UX ═══════════════════════════════════════════ */
+
+/* التنقل الرئيسي بحالة نشطة */
+.main-nav{
+  display:inline-flex; gap:2px; padding:3px;
+  background:rgba(0,0,0,0.045); border-radius:12px;
+}
+.nav-link{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:7px 14px; border-radius:9px; text-decoration:none;
+  font-size:12px; font-weight:700; color:var(--ink-2);
+  transition:background .14s ease, color .14s ease;
+}
+.nav-link:hover{ background:rgba(0,0,0,0.05); color:var(--ink-1); }
+.nav-link.active{
+  background:#163A2C; color:#fff;
+  box-shadow:0 2px 8px rgba(22,58,44,0.3);
+}
+
+/* قائمة الأدوات المنسدلة */
+.tools-menu{ position:relative; }
+.tools-pop{
+  position:absolute; top:calc(100% + 6px); inset-inline-start:0; z-index:50;
+  min-width:210px; background:#FFF; border:1px solid var(--line);
+  border-radius:12px; padding:6px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.12);
+  display:flex; flex-direction:column; gap:2px;
+}
+.tools-item{
+  border:none; background:none; cursor:pointer; text-align:right;
+  padding:9px 12px; border-radius:8px; font-size:12px; color:var(--ink-1);
+}
+.tools-item:hover{ background:rgba(0,0,0,0.05); }
+
+/* WCAG: حلقة تركيز مرئية موحدة للوحة المفاتيح */
+:focus-visible{
+  outline:2px solid #C9A227; outline-offset:2px; border-radius:6px;
+}
+:focus:not(:focus-visible){ outline:none; }
+
+/* أهداف لمس 44px على الأجهزة اللمسية */
+@media (pointer:coarse){
+  .btn, .btn.sm, .nav-link, .tools-item, .btn-icon, .pool-toggle, .tn-toggle{
+    min-height:44px; min-width:44px;
+  }
+  .btn-add{ min-height:38px; }
+}
+
+/* الترويسة تلتف بأناقة على الشاشات الضيقة: أيقونات فقط */
+@media (max-width:760px){
+  .nav-link span{ display:none; }
+  .nav-link{ padding:7px 11px; font-size:14px; }
+  .user-email{ display:none; }
+}
+
+/* CTA الحالة الفارغة في الشجرة */
+.oc-empty-cta{
+  margin-top:8px; border:1px solid #C9A227; background:#FBF6E3;
+  color:#8A6D2F; font-size:11px; font-weight:700;
+  padding:6px 14px; border-radius:99px; cursor:pointer;
+}
+.oc-empty-cta:hover{ background:#F3E5BC; }
+.oc-wrap.oc-theatre .oc-empty-cta{
+  background:rgba(212,175,55,0.15); border-color:rgba(212,175,55,0.5); color:#F3E5BC;
+}

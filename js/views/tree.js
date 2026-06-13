@@ -43,9 +43,9 @@ export function renderTree(root, store, router) {
       <button data-l="stack" class="btn sm">☰ قائمة</button>
     </span>
     <span class="oc-seg" id="oc-zoom">
-      <button class="btn sm" data-z="out">−</button>
+      <button class="btn sm" data-z="out" aria-label="تصغير">−</button>
       <span class="oc-zoom-val tnum">${Math.round(ocState.zoom * 100)}%</span>
-      <button class="btn sm" data-z="in">+</button>
+      <button class="btn sm" data-z="in" aria-label="تكبير">+</button>
       <button class="btn sm" data-z="fit">ملاءمة</button>
     </span>
     <button class="btn sm" id="oc-expand">⊞ فتح الكل</button>
@@ -436,7 +436,8 @@ function columnHtml(p, store, q, hit) {
     </div>
     <div class="oc-cards">
       ${visCards.map(c => cardHtml(c, pf, store, q, hit)).join('') ||
-        '<div class="oc-empty">لا مفاهيم</div>'}
+        `<div class="oc-empty">لا مفاهيم بعد<br>
+         <button class="oc-empty-cta" data-nav-pf="${escapeText(pf.id)}">+ أضف مفهوماً</button></div>`}
     </div>
   </div>`;
 }

@@ -138,7 +138,7 @@ function renderShellHeader(rootHeader) {
       <div class="user-chip" title="${escape(auth.user.email)}">
         <span class="user-role" data-role="${escape(auth.role)}">${escape(ROLE_LABELS[auth.role] || auth.role)}</span>
         <span class="user-email" dir="ltr">${escape(auth.user.email)}</span>
-        <button class="btn-icon sm" id="btn-signout" title="تسجيل الخروج">⎋</button>
+        <button class="btn-icon sm" id="btn-signout" title="تسجيل الخروج" aria-label="تسجيل الخروج">⎋</button>
       </div>` : '';
 
   rootHeader.innerHTML = `
@@ -152,15 +152,51 @@ function renderShellHeader(rootHeader) {
         <span id="conn-text">جارٍ الاتصال…</span>
       </div>
       ${userChip}
-      ${auth?.isOwner ? '<button class="btn" id="btn-users">👥 المستخدمون</button>' : ''}
-      <button class="btn" id="btn-export" title="تصدير نسخة احتياطية JSON">⇩ تصدير</button>
-      ${canWrite ? '<button class="btn" id="btn-import" title="استيراد نسخة احتياطية JSON">⇪ استيراد</button>' : ''}
-      ${canWrite ? '<button class="btn" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
-      ${!auth || auth.canSee('tree') ? '<a class="btn" href="#tree">🌳 الشجرة</a>' : ''}
-      ${!auth || auth.canSee('workbench') ? '<a class="btn" href="#workbench">🛠 الورشة</a>' : ''}
-      ${!auth || auth.canSee('portfolios') ? '<a class="btn" href="#portfolios">📊 المحافظ</a>' : ''}
+      <nav class="main-nav" aria-label="التنقل الرئيسي">
+        ${!auth || auth.canSee('tree') ? '<a class="nav-link" data-nav="tree" href="#tree">🌳 <span>الشجرة</span></a>' : ''}
+        ${!auth || auth.canSee('portfolios') ? '<a class="nav-link" data-nav="portfolios" href="#portfolios">📊 <span>المحافظ</span></a>' : ''}
+        ${!auth || auth.canSee('workbench') ? '<a class="nav-link" data-nav="workbench" href="#workbench">🛠 <span>الورشة</span></a>' : ''}
+      </nav>
+      <div class="tools-menu">
+        <button class="btn" id="btn-tools" aria-haspopup="true" aria-expanded="false" aria-label="قائمة الأدوات">⚙ أدوات</button>
+        <div class="tools-pop" id="tools-pop" hidden>
+          <button class="tools-item" id="btn-export">⇩ تصدير نسخة احتياطية</button>
+          ${canWrite ? '<button class="tools-item" id="btn-import">⇪ استيراد نسخة احتياطية</button>' : ''}
+          ${canWrite ? '<button class="tools-item" id="btn-baseline">🎯 تثبيت Baseline</button>' : ''}
+          ${auth?.isOwner ? '<button class="tools-item" id="btn-users">👥 المستخدمون</button>' : ''}
+        </div>
+      </div>
     </div>
   `;
+
+  /* قائمة الأدوات: فتح/إغلاق + إغلاق بالنقر خارجها أو Esc */
+  const toolsBtn = rootHeader.querySelector('#btn-tools');
+  const toolsPop = rootHeader.querySelector('#tools-pop');
+  if (toolsBtn && toolsPop) {
+    const closePop = () => { toolsPop.hidden = true; toolsBtn.setAttribute('aria-expanded', 'false'); };
+    toolsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toolsPop.hidden = !toolsPop.hidden;
+      toolsBtn.setAttribute('aria-expanded', String(!toolsPop.hidden));
+    });
+    document.addEventListener('click', (e) => { if (!toolsPop.contains(e.target)) closePop(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
+    toolsPop.addEventListener('click', () => closePop());
+  }
+
+  /* الحالة النشطة لروابط التنقل (مبدأ Visibility of System Status) */
+  const markActiveNav = () => {
+    const KEY = { tree:'tree', portfolios:'portfolios', portfolio:'portfolios',
+                  project:'portfolios', workbench:'workbench' };
+    const current = KEY[(location.hash.slice(1) || APP.default_view).split('?')[0]] || '';
+    rootHeader.querySelectorAll('.nav-link').forEach(a => {
+      const active = a.dataset.nav === current;
+      a.classList.toggle('active', active);
+      if (active) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+  };
+  markActiveNav();
+  window.addEventListener('hashchange', markActiveNav);
 
   /* تسجيل الخروج */
   rootHeader.querySelector('#btn-signout')?.addEventListener('click', async () => {
