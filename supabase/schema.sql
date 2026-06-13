@@ -199,3 +199,12 @@ CREATE INDEX IF NOT EXISTS idx_wb_phases_depends
 -- v4.8 (migration: wb_v48_user_views):
 -- wb_user_roles.allowed_views jsonb (NULL = الكل) + wb_list_users موسعة
 -- + RPC wb_set_user_views(target, views) للمالك فقط.
+
+-- v5.3 (migration: wb_v53_security_hardening + wb_v53_revoke_anon_helpers):
+-- ح1: RLS على project_files (نموذج wb) + bot_settings (مقفل عن API)
+-- ح2: إزالة سياسة wb_user_roles_manage المزدوجة + دوال wb_my_role/wb_can_edit القديمة
+-- م1: تثبيت search_path لـ sync_bot_users_phone_columns
+-- م2: wb_user_roles_read يستخدم (select auth.uid()) — أداء RLS أفضل بمقدار
+-- م3: فهرس idx_maturity_history_parent
+-- سحب EXECUTE من anon عن wb_can_read/write/current_role/is_admin (الورشة خلف المصادقة)
+-- ملاحظة: wb_capture_history(_mn) دوال trigger داخلية — تحذير Advisor إيجابية كاذبة، أُبقيت.

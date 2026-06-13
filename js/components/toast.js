@@ -33,3 +33,7 @@ export const toastSuccess = (m) => toast(m, 'success');
 export const toastWarn    = (m) => toast(m, 'warning');
 export const toastError   = (m) => toast(m, 'danger', 4000);
 export const toastInfo    = (m) => toast(m, 'info');
+
+/* v5.3: مساعد موحّد لأخطاء العمليات — رسالة عربية متسقة + سياق اختياري */
+export const toastFail = (context, err) =>
+  toast(`تعذّر ${context}${err?.message ? ' — ' + err.message : ''}`, 'danger', 4500);
