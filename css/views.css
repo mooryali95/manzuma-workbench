@@ -718,3 +718,105 @@
 .pool-section-title[data-sec-toggle]:hover{ color:var(--ink-1); }
 .sec-chev{ display:inline-block; width:12px; font-size:9px; color:var(--ink-3); }
 .pool-section.sec-collapsed .pool-items{ display:none; }
+
+/* ═══ v4.9 — غرفة القيادة ═══════════════════════════════════════ */
+
+/* الجذر: بطاقة فاخرة بحلقة تقدم */
+.oc-root{
+  display:flex; align-items:center; gap:16px; text-align:right;
+  background:linear-gradient(135deg, #1C4A38 0%, #0F2E22 100%);
+  border:1px solid rgba(212,175,55,0.25);
+  border-radius:18px; padding:16px 24px; min-width:280px;
+  box-shadow:0 12px 32px rgba(15,46,34,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.oc-ring{ position:relative; width:64px; height:64px; flex:0 0 64px; }
+.oc-ring svg{ transform:rotate(-90deg); }
+.oc-ring .ring-bg{ fill:none; stroke:rgba(255,255,255,0.12); stroke-width:6; }
+.oc-ring .ring-fg{
+  fill:none; stroke:#D4AF37; stroke-width:6; stroke-linecap:round;
+  transition:stroke-dashoffset 1.1s cubic-bezier(.22,.8,.3,1);
+  filter:drop-shadow(0 0 4px rgba(212,175,55,0.45));
+}
+.oc-ring .ring-num{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:800; color:#F3E5BC;
+}
+.oc-ring .ring-num::after{ content:'%'; font-size:9px; margin-inline-start:1px; opacity:0.8; }
+.oc-root-name{ font-size:15px; font-weight:800; color:#FFF; }
+.oc-root-meta{ font-size:11px; color:rgba(255,255,255,0.75); margin-top:5px; }
+.oc-root-meta b{ color:#F3E5BC; }
+.oc-root-meta .late{ color:#FFB4A8; }
+
+/* رؤوس المحافظ: تدرج وعمق */
+.oc-pf-head{
+  background:linear-gradient(180deg, #FFFFFF 0%, var(--pfbg) 100%);
+  box-shadow:0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.7);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.oc-pf-head:hover{ transform:translateY(-1px); box-shadow:0 5px 14px rgba(0,0,0,0.08); }
+
+/* البطاقات: طبقات وارتفاع عند التمرير */
+.oc-card{
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+.oc-card:hover{ transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,0,0,0.10); }
+
+/* الخطوط: لمسة أنعم */
+.oc-svg .oc-lines path{ stroke-width:2.25; opacity:0.9; }
+
+/* ── 🎦 المسرح: قماش المجلس الداكن ── */
+.oc-theatre-btn.active{ background:#0F2E22; color:#F3E5BC; border-color:#D4AF37; }
+.oc-wrap.oc-theatre{
+  background:radial-gradient(1100px 600px at 50% -80px, #16402F 0%, #0C241A 55%, #081A13 100%);
+  border-radius:18px; padding:28px 18px 40px;
+}
+.oc-wrap.oc-theatre:fullscreen{ border-radius:0; padding:48px 36px; overflow:auto; }
+.oc-wrap.oc-theatre .oc-svg .oc-lines path{
+  stroke:#D4AF37; filter:drop-shadow(0 0 5px rgba(212,175,55,0.5));
+}
+.oc-wrap.oc-theatre .oc-root{
+  background:linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+  backdrop-filter:blur(8px);
+  border-color:rgba(212,175,55,0.45);
+  box-shadow:0 16px 44px rgba(0,0,0,0.45);
+}
+.oc-wrap.oc-theatre .oc-pf-head{
+  background:rgba(255,255,255,0.07); backdrop-filter:blur(6px);
+  border-color:color-mix(in srgb, var(--pfc) 55%, transparent);
+  border-top-color:var(--pfc);
+  box-shadow:0 4px 16px rgba(0,0,0,0.35);
+}
+.oc-wrap.oc-theatre .oc-pf-name{ color:#FFF; }
+.oc-wrap.oc-theatre .oc-pf-meta{ color:rgba(255,255,255,0.85); }
+.oc-wrap.oc-theatre .oc-card{
+  background:rgba(255,255,255,0.06); backdrop-filter:blur(6px);
+  border-color:rgba(255,255,255,0.12);
+  box-shadow:0 6px 20px rgba(0,0,0,0.3);
+}
+.oc-wrap.oc-theatre .oc-card.is-late{
+  border-inline-start-color:#FF6B5E; background:rgba(255,107,94,0.08);
+}
+.oc-wrap.oc-theatre .oc-card-name,
+.oc-wrap.oc-theatre .oc-card-pct{ color:#FFF; }
+.oc-wrap.oc-theatre .oc-card-pct.late{ color:#FFB4A8; }
+.oc-wrap.oc-theatre .oc-bar{ background:rgba(255,255,255,0.12); }
+.oc-wrap.oc-theatre .oc-fill{ background:linear-gradient(90deg,#D4AF37,#F3E5BC); }
+.oc-wrap.oc-theatre .oc-fill.late{ background:#FF6B5E; }
+.oc-wrap.oc-theatre .oc-chip{ background:rgba(255,255,255,0.10); color:rgba(255,255,255,0.9); }
+.oc-wrap.oc-theatre .oc-item-name{ color:#FFF; }
+.oc-wrap.oc-theatre .oc-item:hover{ background:rgba(255,255,255,0.07); }
+.oc-wrap.oc-theatre .oc-item-meta{ color:rgba(255,255,255,0.65); }
+.oc-wrap.oc-theatre .oc-items{ border-top-color:rgba(255,255,255,0.15); }
+.oc-wrap.oc-theatre .oc-empty{
+  background:rgba(255,255,255,0.04); border-color:rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.5);
+}
+.oc-wrap.oc-theatre .oc-dot{ border-color:rgba(255,255,255,0.4); background:transparent; }
+.oc-wrap.oc-theatre .oc-dot.s-completed{ background:#7BC96F; border-color:#7BC96F; }
+.oc-wrap.oc-theatre .oc-dot.s-in_progress{ background:#E8B339; border-color:#E8B339; }
+.oc-wrap.oc-theatre .oc-dot.s-blocked{ background:#FF6B5E; border-color:#FF6B5E; }
+
+@media (prefers-reduced-motion: reduce){
+  .oc-ring .ring-fg, .oc-card, .oc-pf-head{ transition:none !important; }
+}

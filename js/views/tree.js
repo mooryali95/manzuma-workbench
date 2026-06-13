@@ -22,7 +22,8 @@ const ocState = {
   openPfs: new Set(),                                  /* لطور القائمة */
   search: '',
   layout: localStorage.getItem('oc_layout') || 'auto', /* auto|wide|grid|stack */
-  zoom: Number(localStorage.getItem('oc_zoom')) || 1
+  zoom: Number(localStorage.getItem('oc_zoom')) || 1,
+  theatre: false   /* وضع العرض — لا يُحفظ: التطبيق يفتح فاتحاً دائماً */
 };
 let _ro = null;  /* ResizeObserver */
 
@@ -49,6 +50,7 @@ export function renderTree(root, store, router) {
     </span>
     <button class="btn sm" id="oc-expand">⊞ فتح الكل</button>
     <button class="btn sm" id="oc-collapse">⊟ إغلاق</button>
+    <button class="btn sm oc-theatre-btn" id="oc-theatre">🎦 وضع العرض</button>
   `;
   root.appendChild(tools);
 
@@ -73,6 +75,29 @@ export function renderTree(root, store, router) {
     ocState.openCards.clear();
     draw();
   });
+
+  /* 🎦 وضع العرض: مسرح داكن + ملء شاشة للاجتماعات */
+  const theatreBtn = tools.querySelector('#oc-theatre');
+  const applyTheatre = () => {
+    wrap.classList.toggle('oc-theatre', ocState.theatre);
+    theatreBtn.classList.toggle('active', ocState.theatre);
+    theatreBtn.textContent = ocState.theatre ? '✕ خروج من العرض' : '🎦 وضع العرض';
+  };
+  theatreBtn.addEventListener('click', async () => {
+    ocState.theatre = !ocState.theatre;
+    applyTheatre();
+    try {
+      if (ocState.theatre && !document.fullscreenElement) await wrap.requestFullscreen();
+      else if (!ocState.theatre && document.fullscreenElement) await document.exitFullscreen();
+    } catch { /* المتصفح قد يمنع — الوضع الداكن يعمل بدونه */ }
+    draw();
+  });
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && ocState.theatre) {
+      ocState.theatre = false; applyTheatre(); draw();
+    }
+  });
+  applyTheatre();
 
   /* أطوار العرض */
   const markLayout = () => tools.querySelectorAll('#oc-layouts .btn').forEach(b =>
@@ -227,12 +252,26 @@ function drawChart(wrap, model, store, router) {
   wrap.dataset.layout = layout;
 
   const R = model.rootAgg;
+  const RING_R = 26, CIRC = 2 * Math.PI * RING_R;
   const rootCard = `
     <div class="oc-root">
-      <div class="oc-root-name">🏛 ${escapeText(APP.name_ar)}</div>
-      <div class="oc-root-meta">
-        ${R.avg}% إنجاز · ${R.total} عنصر · ${R.phases} مرحلة
-        ${R.overdue ? ` · <b class="late">${R.overdue} متأخرة</b>` : ''}
+      <div class="oc-ring">
+        <svg viewBox="0 0 64 64" width="64" height="64">
+          <circle class="ring-bg" cx="32" cy="32" r="${RING_R}"/>
+          <circle class="ring-fg" cx="32" cy="32" r="${RING_R}"
+            stroke-dasharray="${CIRC.toFixed(1)}"
+            stroke-dashoffset="${CIRC.toFixed(1)}"
+            data-ring-target="${(CIRC * (1 - R.avg / 100)).toFixed(1)}"/>
+        </svg>
+        <span class="ring-num tnum" data-count="${R.avg}">0</span>
+      </div>
+      <div class="oc-root-text">
+        <div class="oc-root-name">🏛 ${escapeText(APP.name_ar)}</div>
+        <div class="oc-root-meta">
+          <b class="tnum" data-count="${R.total}">0</b> عنصر ·
+          <b class="tnum" data-count="${R.phases}">0</b> مرحلة
+          ${R.overdue ? ` · <b class="late tnum" data-count="${R.overdue}">0</b> <span class="late">متأخرة</span>` : ''}
+        </div>
       </div>
     </div>`;
 
@@ -269,7 +308,50 @@ function drawChart(wrap, model, store, router) {
 
   wireInteractions(wrap, model, store, router);
   applyZoom(wrap);
-  requestAnimationFrame(() => drawConnectors(wrap));
+  requestAnimationFrame(() => {
+    drawConnectors(wrap);
+    animateIn(wrap);
+  });
+}
+
+/* ─── حركات غرفة القيادة (تحترم prefers-reduced-motion) ─────────── */
+function animateIn(wrap) {
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* حلقة التقدم */
+  const ring = wrap.querySelector('.ring-fg');
+  if (ring) {
+    const target = ring.dataset.ringTarget;
+    if (reduced) ring.style.strokeDashoffset = target;
+    else requestAnimationFrame(() =>
+      requestAnimationFrame(() => { ring.style.strokeDashoffset = target; }));
+  }
+
+  /* الأرقام تعدّ تصاعدياً */
+  wrap.querySelectorAll('[data-count]').forEach(el => {
+    const target = Number(el.dataset.count) || 0;
+    if (reduced || target === 0) { el.textContent = target; return; }
+    const dur = 750, t0 = performance.now();
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur);
+      el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  /* الخطوط ترسم نفسها */
+  const svg = wrap.querySelector('.oc-svg');
+  if (svg && !reduced) {
+    svg.querySelectorAll('path').forEach((p, i) => {
+      const len = p.getTotalLength();
+      p.style.strokeDasharray = len;
+      p.style.strokeDashoffset = len;
+      p.style.transition = `stroke-dashoffset .55s ease ${0.08 * i}s`;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => { p.style.strokeDashoffset = 0; }));
+    });
+  }
 }
 
 /* موصلات SVG مرسومة من المواضع الفعلية — لا تنكسر مع أي أبعاد */
