@@ -16,7 +16,7 @@ export const SUPABASE = {
 
 export const APP = {
   name_ar: 'المجلس التنفيذي',
-  version: '5.6.1',
+  version: '5.7.0',
   schema_version: 4,
   locale: 'ar-SA',
   default_view: 'portfolios'   // 'portfolios' | 'workbench'
