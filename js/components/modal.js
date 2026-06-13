@@ -30,11 +30,38 @@ function ensure() {
 
   backdropEl.addEventListener('click', () => close());
   modalEl.querySelector('#modal-cancel').addEventListener('click', () => close());
-  modalEl.querySelector('#modal-confirm').addEventListener('click', () => {
+  modalEl.querySelector('#modal-confirm').addEventListener('click', async () => {
+    const btn = modalEl.querySelector('#modal-confirm');
+    if (btn.dataset.busy === '1') return;            /* منع الإرسال المزدوج */
+
+    /* تحقق مرئي: الحقول الإلزامية الفارغة تتوهج ولا يُغلق النموذج */
+    let firstInvalid = null;
+    modalEl.querySelectorAll('[data-required="1"]').forEach(inp => {
+      const empty = !(inp.value && String(inp.value).trim());
+      inp.closest('.field').classList.toggle('field-invalid', empty);
+      if (empty && !firstInvalid) firstInvalid = inp;
+    });
+    if (firstInvalid) {
+      firstInvalid.focus();
+      modalEl.classList.remove('shake'); void modalEl.offsetWidth;
+      modalEl.classList.add('shake');
+      return;
+    }
+
     if (onConfirm) {
       const result = collectFormData();
-      const r = onConfirm(result);
-      if (r === false) return;  /* validation rejected */
+      btn.dataset.busy = '1';
+      const oldLabel = btn.textContent;
+      btn.textContent = 'جارٍ الحفظ…';
+      btn.disabled = true;
+      try {
+        const r = await onConfirm(result);          /* انتظار حقيقي للوعود */
+        if (r === false) return;                    /* رفض تحقق من المستدعي — يبقى مفتوحاً */
+      } finally {
+        btn.dataset.busy = '';
+        btn.textContent = oldLabel;
+        btn.disabled = false;
+      }
     }
     close();
   });
@@ -73,7 +100,9 @@ export function close() {
 export function openForm({ title='إضافة', fields=[], confirm, cancel, confirmLabel='حفظ', cancelLabel='إلغاء' }) {
   ensure();
   modalEl.querySelector('#modal-title').textContent = title;
-  modalEl.querySelector('#modal-confirm').textContent = confirmLabel;
+  const cbtn = modalEl.querySelector('#modal-confirm');
+  cbtn.textContent = confirmLabel;
+  cbtn.className = 'btn primary';                   /* لا يرث لون خطر سابقاً */
   modalEl.querySelector('#modal-cancel').textContent  = cancelLabel;
 
   const body = modalEl.querySelector('#modal-body');
@@ -103,8 +132,15 @@ export function openForm({ title='إضافة', fields=[], confirm, cancel, confi
     } else {
       inputHtml = `<input type="text" data-name="${escapeAttr(f.name)}" value="${escapeAttr(val)}" placeholder="${escapeAttr(f.placeholder||'')}">`;
     }
-    wrap.innerHTML = `<label>${escapeText(f.label)}${reqStar}</label>${inputHtml}${ f.help ? `<div class="field-help">${escapeText(f.help)}</div>` : ''}`;
+    wrap.innerHTML = `<label>${escapeText(f.label)}${reqStar}</label>${inputHtml}` +
+      (f.required ? `<div class="field-error">هذا الحقل مطلوب</div>` : '') +
+      (f.help ? `<div class="field-help">${escapeText(f.help)}</div>` : '');
     body.appendChild(wrap);
+    if (f.required) {
+      const inp = wrap.querySelector('[data-name]');
+      inp.dataset.required = '1';
+      inp.addEventListener('input', () => wrap.classList.remove('field-invalid'));
+    }
   }
 
   onConfirm = (data) => {
@@ -126,7 +162,8 @@ export function confirm({ title='تأكيد', message='هل أنت متأكد؟'
   const body = modalEl.querySelector('#modal-body');
   body.innerHTML = `<p style="margin:0;font-size:13px;color:var(--ink-2);line-height:1.7;white-space:pre-line">${escapeText(message)}</p>`;
   modalEl.querySelector('#modal-confirm').textContent = confirmLabel;
-  modalEl.querySelector('#modal-confirm').className = 'btn ' + (danger ? 'danger' : 'primary');
+  const isDanger = danger || /حذف|إزالة/.test(confirmLabel) || /حذف/.test(title);
+  modalEl.querySelector('#modal-confirm').className = 'btn ' + (isDanger ? 'danger' : 'primary');
   modalEl.querySelector('#modal-cancel').textContent = cancelLabel;
   onConfirm = () => { if (cb) cb(); };
   backdropEl.dataset.open = 'true';

@@ -77,6 +77,11 @@ class Router {
     if (!this.appRoot || !store?.state) return;
     let { view, params } = this.currentRoute;
 
+    /* v5.2: انتقال صفحات ناعم (يحترم تقليل الحركة) */
+    this.appRoot.classList.remove('view-enter');
+    void this.appRoot.offsetWidth;
+    this.appRoot.classList.add('view-enter');
+
     /* v4.8: حارس الصفحات المسموحة */
     const VIEW_KEY = { tree:'tree', portfolios:'portfolios', portfolio:'portfolios',
                        project:'portfolios', workbench:'workbench' };
@@ -441,6 +446,17 @@ async function boot() {
   /* أعد رسم الترويسة الآن بعد توفر المستخدم والدور */
   renderShellHeader(document.getElementById('shell-header'));
   if (BACKEND === 'supabase' && auth) setConn('ok', 'متصل بـ Supabase');
+
+  /* v5.2: هيكل انتظار (Skeleton) — إدراك أداء أفضل من الفراغ */
+  appRoot.innerHTML = `
+    <div class="skeleton-page" aria-busy="true" aria-label="جارٍ التحميل">
+      <div class="sk sk-title"></div>
+      <div class="sk-row">
+        <div class="sk sk-card"></div><div class="sk sk-card"></div>
+        <div class="sk sk-card"></div><div class="sk sk-card"></div>
+      </div>
+      <div class="sk sk-block"></div>
+    </div>`;
 
   try {
     await store.boot();

@@ -526,3 +526,59 @@ body[data-wb-role="viewer"] [data-edit]{
 .oc-wrap.oc-theatre .oc-empty-cta{
   background:rgba(212,175,55,0.15); border-color:rgba(212,175,55,0.5); color:var(--brand-gold-soft);
 }
+
+/* ═══ v5.2 — التكامل: تحقق مرئي، هيكل انتظار، انتقالات ═══ */
+
+/* الحقل غير الصالح */
+.field-error{
+  display:none; font-size:var(--fs-2xs); color:var(--danger);
+  margin-top:4px; font-weight:700;
+}
+.field-invalid input, .field-invalid select, .field-invalid textarea{
+  border-color:var(--danger) !important;
+  box-shadow:0 0 0 3px var(--danger-bg);
+}
+.field-invalid .field-error{ display:block; }
+
+/* اهتزاز لطيف عند محاولة حفظ نموذج ناقص */
+@keyframes modal-shake{
+  10%,90%{ transform:translate(-50%,-50%) translateX(-2px); }
+  20%,80%{ transform:translate(-50%,-50%) translateX(3px); }
+  30%,50%,70%{ transform:translate(-50%,-50%) translateX(-5px); }
+  40%,60%{ transform:translate(-50%,-50%) translateX(5px); }
+}
+.modal.shake{ animation:modal-shake .45s ease; }
+
+/* زر التأكيد أثناء الحفظ */
+#modal-confirm:disabled{ opacity:0.7; cursor:wait; }
+
+/* هيكل الانتظار */
+.skeleton-page{ padding:8px 0; }
+.sk{
+  position:relative; overflow:hidden;
+  background:rgba(0,0,0,0.06); border-radius:var(--r-md);
+}
+.sk::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+  transform:translateX(100%);
+  animation:sk-shimmer 1.4s infinite;
+}
+@keyframes sk-shimmer{ to{ transform:translateX(-100%); } }
+.sk-title{ width:220px; height:26px; margin-bottom:18px; }
+.sk-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+.sk-card{ width:160px; height:74px; }
+.sk-block{ height:300px; }
+
+/* انتقال الصفحات */
+@keyframes view-in{
+  from{ opacity:0; transform:translateY(8px); }
+  to{ opacity:1; transform:none; }
+}
+.view-enter{ animation:view-in .22s ease both; }
+
+@media (prefers-reduced-motion: reduce){
+  .view-enter{ animation:none; }
+  .sk::after{ animation:none; }
+  .modal.shake{ animation:none; }
+}
